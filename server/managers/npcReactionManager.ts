@@ -341,6 +341,19 @@ class NpcReactionManager {
     try {
       const isDirectlyAddressed = event.target?.type === 'npc' && event.target.id === npc.id;
 
+      // Check if player is asking about work/quests and NPC has a desire
+      const desire = npcManager.getCurrentDesire(npc.id);
+      const isAskingAboutWork = geminiService.isAskingAboutWork(event.content);
+
+      if (isAskingAboutWork && desire && event.actor.type === 'player') {
+        // Trigger quest introduction flow
+        return await this.generateQuestIntroduction(npc, event, {
+          desireType: desire.desireType,
+          desireContent: desire.desireContent,
+          desireReason: desire.desireReason || undefined,
+        });
+      }
+
       // Build context for the reaction
       const context = this.buildReactionContext(npc, state, event, isDirectlyAddressed, isConversationContinuation);
 
@@ -400,6 +413,98 @@ class NpcReactionManager {
       gameLog.error('NPC-REACTION', error);
       return false;
     }
+  }
+
+  /**
+   * Generate and send a quest introduction - multiple messages explaining a quest
+   */
+  private async generateQuestIntroduction(
+    npc: NpcTemplate,
+    event: WitnessedEvent,
+    desire: { desireType: string; desireContent: string; desireReason?: string }
+  ): Promise<boolean> {
+    try {
+      // Get item location info if it's an item quest
+      let itemLocation: string | undefined;
+      let directions: string | undefined;
+
+      if (desire.desireType === 'item') {
+        // For now, hardcode some location hints based on the item
+        // TODO: Use actual world data and pathfinding
+        const desireLower = desire.desireContent.toLowerCase();
+        if (desireLower.includes('shears') || desireLower.includes('pruning')) {
+          itemLocation = 'the garden shed here at Bag End';
+          directions = 'Look around the garden - there should be a shed with tools';
+        }
+      }
+
+      const intro = await geminiService.generateQuestIntroduction(
+        npc,
+        event.actor.name,
+        desire,
+        itemLocation,
+        directions
+      );
+
+      // Send the action if there is one
+      if (intro.action) {
+        connectionManager.sendToRoom(event.roomId, {
+          type: 'output',
+          content: `\n${npc.name} ${intro.action}\n`,
+        });
+        await this.delay(800);
+      }
+
+      // Send each message with a short delay between them
+      for (let i = 0; i < intro.messages.length; i++) {
+        const msg = intro.messages[i];
+        connectionManager.sendToRoom(event.roomId, {
+          type: 'output',
+          content: `${npc.name} says: "${msg}"\n`,
+        });
+
+        // Record the last message for conversation continuity
+        if (i === intro.messages.length - 1 && event.actor.type === 'player') {
+          this.recordNpcSpokeToPlayer(
+            event.roomId,
+            npc.id,
+            npc.name,
+            event.actor.id,
+            msg
+          );
+        }
+
+        // Small delay between messages (but not after the last one)
+        if (i < intro.messages.length - 1) {
+          await this.delay(1200);
+        }
+      }
+
+      // Log quest introduction
+      gameLog.log('NPC', 'QUEST-INTRO', `${npc.name} gave quest introduction to ${event.actor.name}`, {
+        desire: desire.desireContent,
+      });
+
+      // Store memory
+      if (event.actor.type === 'player') {
+        npcManager.addMemory(
+          npc.id,
+          'player',
+          event.actor.id,
+          `Asked for help with: ${desire.desireContent}`,
+          7
+        );
+      }
+
+      return true;
+    } catch (error) {
+      gameLog.error('NPC-QUEST-INTRO', error);
+      return false;
+    }
+  }
+
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   /**

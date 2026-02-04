@@ -486,6 +486,84 @@ export function generateGuideAcceptResponse(npcName: string, destination: string
   return responses[Math.floor(Math.random() * responses.length)];
 }
 
+/**
+ * Generate a quest introduction - a series of messages explaining a quest
+ * Returns multiple short messages covering: Relevance, Request, Reward, How
+ */
+export async function generateQuestIntroduction(
+  npc: NpcTemplate,
+  playerName: string,
+  desire: { desireType: string; desireContent: string; desireReason?: string },
+  itemLocation?: string,
+  directions?: string
+): Promise<{ messages: string[]; action?: string }> {
+  const prompt = `You are ${npc.name} in a Hobbit-themed MUD. You need help from ${playerName}.
+
+YOUR CHARACTER:
+- Name: ${npc.name}
+- Personality: ${npc.personality}
+- Speech style: ${npc.speechStyle}
+
+WHAT YOU WANT:
+- Type: ${desire.desireType}
+- Item/Action: ${desire.desireContent}
+- Why: ${desire.desireReason || 'personal reasons'}
+${itemLocation ? `- Where to find it: ${itemLocation}` : ''}
+${directions ? `- Directions: ${directions}` : ''}
+
+Generate a quest introduction as a series of 4 SHORT messages (max 15 words each). Cover:
+1. RELEVANCE: Why are you asking this player? (they're here, they look capable, etc.)
+2. REQUEST: What exactly do you need? Be specific.
+3. REWARD: What will you give them? (gratitude, a favor, information, an item, good word)
+4. HOW: Where can they find it / how to do it?
+
+Stay in character with ${npc.speechStyle}. Be direct and clear, not vague.
+
+Respond with JSON only:
+{
+  "action": "*optional opening action like looking at them*",
+  "messages": [
+    "relevance message",
+    "request message",
+    "reward message",
+    "how message"
+  ]
+}`;
+
+  try {
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+      return { messages: [`I could use some help, ${playerName}.`] };
+    }
+
+    const data = JSON.parse(jsonMatch[0]);
+    return {
+      action: data.action,
+      messages: data.messages || [`I could use some help, ${playerName}.`],
+    };
+  } catch (error) {
+    console.error('Gemini quest intro error:', error);
+    return { messages: [`I could use some help, ${playerName}.`] };
+  }
+}
+
+/**
+ * Detect if player is asking about work/quests/help
+ */
+export function isAskingAboutWork(content: string): boolean {
+  const workPatterns = [
+    'work', 'job', 'help', 'quest', 'task', 'need anything',
+    'do for you', 'assist', 'can i help', 'need help',
+    'anything i can', 'something to do', 'looking for work',
+    'any work', 'got work', 'have work', 'need done'
+  ];
+  const lower = content.toLowerCase();
+  return workPatterns.some(p => lower.includes(p));
+}
+
 export default {
   generateNpcDialogue,
   generateSocialEmote,
@@ -497,4 +575,6 @@ export default {
   generateNpcReaction,
   detectGuideRequest,
   generateGuideAcceptResponse,
+  generateQuestIntroduction,
+  isAskingAboutWork,
 };
