@@ -1,6 +1,7 @@
 import { CommandContext } from '../../shared/types';
 import { connectionManager } from '../managers/connectionManager';
 import { npcManager } from '../managers/npcManager';
+import { npcReactionManager, WitnessedEvent } from '../managers/npcReactionManager';
 import { WebSocket } from 'ws';
 
 // Handle say command
@@ -11,24 +12,34 @@ export async function handleSay(ws: WebSocket, ctx: CommandContext): Promise<str
     return `Say what?`;
   }
 
+  // Check if message is directed at someone (e.g., "say bilbo hello" or "say to bilbo hello")
+  const { target, actualMessage } = parseTargetedMessage(ctx.args, ctx);
+
   // Notify others in room
   connectionManager.sendToRoom(
     ctx.player.currentRoom,
     {
       type: 'output',
-      content: `\n${ctx.player.name} says: "${message}"\n`,
+      content: `\n${ctx.player.name} says: "${actualMessage}"\n`,
     },
     ctx.player.id
   );
 
-  // NPCs in the room might react (simple version - just updates their context)
-  const npcs = npcManager.getNpcsInRoom(ctx.player.currentRoom);
-  for (const { template } of npcs) {
-    // Record that the NPC heard this
-    npcManager.addMemory(template.id, 'player', ctx.player.id, `Said: "${message}"`, 4);
-  }
+  // Create witnessed event for NPCs
+  const event: WitnessedEvent = {
+    type: 'say',
+    actor: { type: 'player', name: ctx.player.name, id: ctx.player.id },
+    target: target,
+    content: actualMessage,
+    roomId: ctx.player.currentRoom,
+  };
 
-  return `You say: "${message}"`;
+  // Process NPC reactions (async, don't wait)
+  npcReactionManager.processWitnessedEvent(event).catch(err => {
+    console.error('Error processing NPC reactions:', err);
+  });
+
+  return `You say: "${actualMessage}"`;
 }
 
 // Handle shout command (heard in adjacent rooms)
@@ -151,6 +162,9 @@ export async function handleEmote(ws: WebSocket, ctx: CommandContext): Promise<s
     return `Emote what? Usage: emote <action>`;
   }
 
+  // Check if emote mentions someone
+  const target = findTargetInMessage(action, ctx);
+
   // Notify room
   connectionManager.sendToRoom(
     ctx.player.currentRoom,
@@ -160,6 +174,20 @@ export async function handleEmote(ws: WebSocket, ctx: CommandContext): Promise<s
     },
     ctx.player.id
   );
+
+  // Create witnessed event for NPCs
+  const event: WitnessedEvent = {
+    type: 'emote',
+    actor: { type: 'player', name: ctx.player.name, id: ctx.player.id },
+    target: target,
+    content: action,
+    roomId: ctx.player.currentRoom,
+  };
+
+  // Process NPC reactions (async, don't wait)
+  npcReactionManager.processWitnessedEvent(event).catch(err => {
+    console.error('Error processing NPC reactions:', err);
+  });
 
   return `${ctx.player.name} ${action}`;
 }
@@ -200,4 +228,77 @@ function getOppositeDirection(dir: string): string {
     down: 'above',
   };
   return opposites[dir] || 'somewhere';
+}
+
+// Parse a targeted message (e.g., "say bilbo hello" or "say to bilbo hello")
+function parseTargetedMessage(args: string[], ctx: CommandContext): {
+  target?: { type: 'player' | 'npc'; name: string; id: number };
+  actualMessage: string;
+} {
+  if (args.length < 2) {
+    return { actualMessage: args.join(' ') };
+  }
+
+  let potentialTarget = args[0];
+  let messageStart = 1;
+
+  // Handle "say to bilbo hello"
+  if (potentialTarget.toLowerCase() === 'to' && args.length > 2) {
+    potentialTarget = args[1];
+    messageStart = 2;
+  }
+
+  // Check if first word is an NPC name
+  const npcs = npcManager.getNpcsInRoom(ctx.player.currentRoom);
+  for (const { template } of npcs) {
+    if (
+      template.keywords.some(k => k.toLowerCase() === potentialTarget.toLowerCase()) ||
+      template.name.toLowerCase().includes(potentialTarget.toLowerCase())
+    ) {
+      return {
+        target: { type: 'npc', name: template.name, id: template.id },
+        actualMessage: args.slice(messageStart).join(' ') || args.join(' '),
+      };
+    }
+  }
+
+  // Check if first word is a player name
+  const players = connectionManager.getPlayersInRoom(ctx.player.currentRoom);
+  for (const player of players) {
+    if (player.name.toLowerCase() === potentialTarget.toLowerCase() && player.id !== ctx.player.id) {
+      return {
+        target: { type: 'player', name: player.name, id: player.id },
+        actualMessage: args.slice(messageStart).join(' ') || args.join(' '),
+      };
+    }
+  }
+
+  // No target found, return full message
+  return { actualMessage: args.join(' ') };
+}
+
+// Find if an emote/action mentions someone in the room
+function findTargetInMessage(message: string, ctx: CommandContext): { type: 'player' | 'npc'; name: string; id: number } | undefined {
+  const msgLower = message.toLowerCase();
+
+  // Check NPCs
+  const npcs = npcManager.getNpcsInRoom(ctx.player.currentRoom);
+  for (const { template } of npcs) {
+    if (
+      template.keywords.some(k => msgLower.includes(k.toLowerCase())) ||
+      msgLower.includes(template.name.toLowerCase())
+    ) {
+      return { type: 'npc', name: template.name, id: template.id };
+    }
+  }
+
+  // Check players
+  const players = connectionManager.getPlayersInRoom(ctx.player.currentRoom);
+  for (const player of players) {
+    if (player.id !== ctx.player.id && msgLower.includes(player.name.toLowerCase())) {
+      return { type: 'player', name: player.name, id: player.id };
+    }
+  }
+
+  return undefined;
 }

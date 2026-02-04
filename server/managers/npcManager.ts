@@ -373,6 +373,33 @@ class NpcManager {
     // Log the dialogue request
     gameLog.npcDialogue(npc.name, player.name, playerMessage, 'generating...');
 
+    // Check if this is a guide request
+    console.log('[GUIDE-DEBUG] Checking for guide request:', playerMessage);
+    const { npcGuideManager } = await import('./npcGuideManager');
+    const guideCheck = await geminiService.detectGuideRequest(
+      playerMessage,
+      npcGuideManager.getAvailableLocations()
+    );
+    console.log('[GUIDE-DEBUG] Guide check result:', JSON.stringify(guideCheck));
+
+    gameLog.log('NPC', 'GUIDE-CHECK', `Guide detection for "${playerMessage}"`, {
+      isGuideRequest: guideCheck.isGuideRequest,
+      destination: guideCheck.destination,
+    });
+
+    if (guideCheck.isGuideRequest && guideCheck.destination) {
+      // Try to guide the player
+      const guideResult = await npcGuideManager.startGuiding(npc, player, guideCheck.destination);
+      gameLog.log('NPC', 'GUIDE-RESULT', `Guide result: ${guideResult.success}`, {
+        message: guideResult.message,
+      });
+      if (guideResult.success) {
+        gameLog.npcDialogueResponse(npc.name, guideResult.message);
+        return guideResult.message.replace(`${npc.name} says: `, '');
+      }
+      // If guiding failed, fall through to normal dialogue
+    }
+
     const response = await geminiService.generateNpcDialogue(npc, player, playerMessage, context);
 
     // Log the response

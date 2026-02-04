@@ -2,6 +2,7 @@ import { CommandContext } from '../../shared/types';
 import { socialManager } from '../managers/socialManager';
 import { npcManager } from '../managers/npcManager';
 import { connectionManager } from '../managers/connectionManager';
+import { npcReactionManager } from '../managers/npcReactionManager';
 import { WebSocket } from 'ws';
 
 // Handle a social command
@@ -65,6 +66,16 @@ async function executeSocial(
           `${social.sentiment} gesture: ${social.name}`,
           3
         );
+
+        // Trigger NPC reaction to the social
+        npcReactionManager.processWitnessedEvent({
+          type: 'social',
+          actor: { type: 'player', name: ctx.player.name, id: ctx.player.id },
+          target: { type: 'npc', name: template.name, id: template.id },
+          content: `${ctx.player.name} ${social.name}s at ${template.name}`,
+          roomId: ctx.room.id,
+        });
+
         break;
       }
     }

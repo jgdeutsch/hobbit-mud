@@ -3,13 +3,16 @@ import { worldManager } from '../managers/worldManager';
 import { playerManager } from '../managers/playerManager';
 import { npcManager } from '../managers/npcManager';
 import { npcDesiresManager } from '../managers/npcDesiresManager';
+import { npcReactionManager } from '../managers/npcReactionManager';
 import { connectionManager } from '../managers/connectionManager';
 import { timeManager } from '../managers/timeManager';
 import { equipmentManager } from '../managers/equipmentManager';
 import { conditionManager } from '../managers/conditionManager';
 import { generateRoomOutput } from './movement';
+import geminiService from '../services/geminiService';
 import { WebSocket } from 'ws';
 import { getItemTemplate } from '../data/items';
+import { NPC_TEMPLATES, getNpcByKeyword } from '../data/npcs';
 
 // Handle look command
 export async function handleLook(ws: WebSocket, ctx: CommandContext): Promise<string> {
@@ -66,14 +69,7 @@ export async function handleLook(ws: WebSocket, ctx: CommandContext): Promise<st
   const players = connectionManager.getPlayersInRoom(ctx.room.id);
   for (const player of players) {
     if (player.name.toLowerCase() === target.toLowerCase() && player.id !== ctx.player.id) {
-      // Show other player's equipment and condition
-      const equipDesc = equipmentManager.getEquipmentQualityDescription(player.id);
-      const conditionDesc = conditionManager.getVisibleConditionDescription(player.id);
-      let desc = `You see ${player.name}, a fellow adventurer who is ${equipDesc}.`;
-      if (conditionDesc) {
-        desc += ` They ${conditionDesc}.`;
-      }
-      return desc;
+      return handleLookPlayer(ctx, player);
     }
   }
 
@@ -110,6 +106,70 @@ function handleLookSelf(ctx: CommandContext): string {
   if (armor > 0) {
     lines.push(`  Armor:     ${armor}`);
   }
+
+  return lines.join('\n');
+}
+
+// Handle looking at another player
+function handleLookPlayer(ctx: CommandContext, target: { id: number; name: string }): string {
+  const lines: string[] = [];
+
+  // Basic description
+  const equipQuality = equipmentManager.getEquipmentQualityDescription(target.id);
+  lines.push(`\x1b[1m${target.name}\x1b[0m`);
+  lines.push(`You see ${target.name}, a fellow adventurer who is ${equipQuality}.`);
+  lines.push('');
+
+  // Visible equipment items
+  const visibleEquipment = equipmentManager.getVisibleEquipmentDescriptions(target.id);
+  if (visibleEquipment.length > 0) {
+    lines.push('\x1b[36mVisible Equipment:\x1b[0m');
+    for (const item of visibleEquipment) {
+      lines.push(`  ${item}`);
+    }
+    lines.push('');
+  }
+
+  // Condition (what you can observe)
+  const condition = conditionManager.getCondition(target.id);
+  lines.push('\x1b[36mAppearance:\x1b[0m');
+
+  // Cleanliness
+  const cleanDesc = conditionManager.getCleanlinessDescription(condition.cleanliness);
+  const cleanColor = condition.cleanliness >= 70 ? '\x1b[32m' : condition.cleanliness >= 40 ? '\x1b[33m' : '\x1b[31m';
+  lines.push(`  They appear ${cleanColor}${cleanDesc}\x1b[0m.`);
+
+  // Fatigue
+  const fatigueDesc = conditionManager.getFatigueDescription(condition.fatigue);
+  const fatigueColor = condition.fatigue >= 70 ? '\x1b[32m' : condition.fatigue >= 40 ? '\x1b[33m' : '\x1b[31m';
+  lines.push(`  They look ${fatigueColor}${fatigueDesc}\x1b[0m.`);
+
+  // Blood (only if present)
+  if (condition.bloodiness > 5) {
+    const bloodDesc = conditionManager.getBloodyDescription(condition.bloodiness);
+    lines.push(`  \x1b[31mThey ${bloodDesc}.\x1b[0m`);
+  }
+
+  // Wounds (only if present)
+  if (condition.wounds > 5) {
+    const woundDesc = conditionManager.getWoundsDescription(condition.wounds);
+    lines.push(`  \x1b[33mThey ${woundDesc}.\x1b[0m`);
+  }
+
+  // Health indicator (rough estimate based on visible wounds)
+  if (condition.wounds > 60) {
+    lines.push(`  They appear to be in \x1b[31mserious condition\x1b[0m.`);
+  } else if (condition.wounds > 30) {
+    lines.push(`  They appear to be \x1b[33mhurt\x1b[0m.`);
+  } else {
+    lines.push(`  They appear to be in \x1b[32mgood health\x1b[0m.`);
+  }
+
+  // TODO: Add player-to-player feelings when that system is implemented
+  // For now, just show neutral relationship
+  lines.push('');
+  lines.push('\x1b[36mYour Relationship:\x1b[0m');
+  lines.push(`  You don't know ${target.name} very well yet.`);
 
   return lines.join('\n');
 }
@@ -367,6 +427,15 @@ export async function handleTalk(ws: WebSocket, ctx: CommandContext): Promise<st
 
       // Generate AI response
       const response = await npcManager.generateDialogue(template, ctx.player, message);
+
+      // Record this conversation for context tracking (NPC spoke to player)
+      npcReactionManager.recordNpcSpokeToPlayer(
+        ctx.room.id,
+        template.id,
+        template.name,
+        ctx.player.id,
+        response
+      );
 
       // Notify room of conversation
       connectionManager.sendToRoom(
@@ -684,4 +753,126 @@ export async function handleRest(ws: WebSocket, ctx: CommandContext): Promise<st
   );
 
   return result;
+}
+
+// Handle recall command - remember your relationship with an NPC
+export async function handleRecall(ws: WebSocket, ctx: CommandContext): Promise<string> {
+  const targetName = ctx.args.join(' ');
+
+  if (!targetName) {
+    return `Recall whom? Usage: recall <npc name>`;
+  }
+
+  // Find NPC by keyword (doesn't need to be in room)
+  const npc = getNpcByKeyword(targetName);
+  if (!npc) {
+    // Try partial match on all NPCs
+    const matchedNpc = NPC_TEMPLATES.find(n =>
+      n.name.toLowerCase().includes(targetName.toLowerCase()) ||
+      n.keywords.some(k => k.toLowerCase().includes(targetName.toLowerCase()))
+    );
+    if (!matchedNpc) {
+      return `You don't recall anyone named '${targetName}'.`;
+    }
+    return generateRecallOutput(ctx, matchedNpc);
+  }
+
+  return generateRecallOutput(ctx, npc);
+}
+
+async function generateRecallOutput(ctx: CommandContext, npc: NpcTemplate): Promise<string> {
+  const feeling = npcManager.getFeeling(npc.id, 'player', ctx.player.id);
+  const memories = npcManager.getMemories(npc.id, 'player', ctx.player.id, 5);
+
+  // If no relationship yet
+  if (!feeling && memories.length === 0) {
+    return `You pause to think about ${npc.name}...\n\nYou haven't really gotten to know ${npc.name} yet. Perhaps you should seek them out and strike up a conversation.`;
+  }
+
+  // Build context for AI to generate narrative
+  const trust = feeling?.trust ?? 50;
+  const affection = feeling?.affection ?? 50;
+  const socialCapital = feeling?.socialCapital ?? 0;
+
+  // Determine relationship quality
+  let trustDesc = 'neutral';
+  if (trust >= 80) trustDesc = 'deep trust';
+  else if (trust >= 65) trustDesc = 'growing trust';
+  else if (trust >= 35) trustDesc = 'cautious';
+  else if (trust >= 20) trustDesc = 'suspicious';
+  else trustDesc = 'distrustful';
+
+  let affectionDesc = 'neutral';
+  if (affection >= 80) affectionDesc = 'warm fondness';
+  else if (affection >= 65) affectionDesc = 'friendly';
+  else if (affection >= 35) affectionDesc = 'polite';
+  else if (affection >= 20) affectionDesc = 'cool';
+  else affectionDesc = 'cold';
+
+  let standingDesc = 'neutral standing';
+  if (socialCapital >= 50) standingDesc = 'excellent standing - they owe you';
+  else if (socialCapital >= 20) standingDesc = 'good standing';
+  else if (socialCapital >= -20) standingDesc = 'neutral standing';
+  else if (socialCapital >= -50) standingDesc = 'poor standing';
+  else standingDesc = 'terrible standing - you owe them';
+
+  const memoryText = memories.length > 0
+    ? memories.map(m => m.memoryContent).join('; ')
+    : 'No specific memories';
+
+  // Generate narrative via AI
+  const prompt = `Generate a brief, atmospheric first-person reflection (2-3 sentences) for a hobbit named ${ctx.player.name} recalling their relationship with ${npc.name}.
+
+NPC: ${npc.name}
+NPC personality: ${npc.personality}
+Trust level: ${trustDesc} (${trust}/100)
+Affection level: ${affectionDesc} (${affection}/100)
+Standing: ${standingDesc}
+Recent interactions: ${memoryText}
+
+Write from the player's perspective, as if they're sitting by a fire thinking back. Don't use numbers. Focus on the emotional quality of the relationship and any notable memories. Keep it under 50 words. Be specific to the character and memories.`;
+
+  try {
+    const { GoogleGenerativeAI } = await import('@google/generative-ai');
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-2.0-flash',
+      generationConfig: { temperature: 0.8, maxOutputTokens: 150 },
+    });
+
+    const result = await model.generateContent(prompt);
+    const narrative = result.response.text().trim();
+
+    const lines: string[] = [];
+    lines.push(`\x1b[36mYou pause to think about ${npc.name}...\x1b[0m`);
+    lines.push('');
+    lines.push(narrative);
+    lines.push('');
+
+    // Add a subtle hint about the relationship quality
+    if (trust >= 65 && affection >= 65) {
+      lines.push(`\x1b[32m${npc.name} considers you a friend.\x1b[0m`);
+    } else if (trust <= 35 || affection <= 35) {
+      lines.push(`\x1b[33m${npc.name} seems wary of you.\x1b[0m`);
+    } else {
+      lines.push(`\x1b[2m${npc.name} regards you as an acquaintance.\x1b[0m`);
+    }
+
+    return lines.join('\n');
+  } catch (error) {
+    // Fallback if AI fails
+    const lines: string[] = [];
+    lines.push(`\x1b[36mYou pause to think about ${npc.name}...\x1b[0m`);
+    lines.push('');
+
+    if (trust >= 65 && affection >= 65) {
+      lines.push(`You've built a good relationship with ${npc.name}. They seem to trust and like you.`);
+    } else if (trust <= 35 || affection <= 35) {
+      lines.push(`Your relationship with ${npc.name} is strained. There's work to be done to earn their trust.`);
+    } else {
+      lines.push(`${npc.name} knows you, but you haven't made a strong impression yet - for better or worse.`);
+    }
+
+    return lines.join('\n');
+  }
 }

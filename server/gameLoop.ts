@@ -2,6 +2,7 @@ import { timeManager } from './managers/timeManager';
 import { npcManager } from './managers/npcManager';
 import { connectionManager } from './managers/connectionManager';
 import { worldManager } from './managers/worldManager';
+import { npcReactionManager } from './managers/npcReactionManager';
 import geminiService, { NpcFullContext } from './services/geminiService';
 import { gameLog } from './services/logger';
 import { NpcTemplate, Player } from '../shared/types';
@@ -177,7 +178,7 @@ async function processNpcToNpcInteraction(
 
         // Update listener's memory of speaker
         npcManager.addMemory(
-          listener.template.id,
+          listener.id,
           'npc',
           speaker.id,
           `Said: "${line.dialogue.substring(0, 50)}..."`,
@@ -257,6 +258,15 @@ async function processNpcToPlayerInteraction(
     });
 
     gameLog.npcDialogueResponse(npc.template.name, `[to ${player.name}] ${response.dialogue}`);
+
+    // Record this conversation for context tracking (so player responses go to this NPC)
+    npcReactionManager.recordNpcSpokeToPlayer(
+      roomId,
+      npc.template.id,
+      npc.template.name,
+      player.id,
+      response.dialogue
+    );
 
     // Record in NPC's memory
     npcManager.addMemory(

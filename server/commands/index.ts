@@ -21,6 +21,7 @@ import {
   handleInventory,
   handleTalk,
   handleContext,
+  handleRecall,
   handleTime,
   handleScore,
   handleExamine,
@@ -76,6 +77,8 @@ const COMMANDS: Record<string, CommandHandler> = {
   i: handleInventory,
   talk: handleTalk,
   context: handleContext,
+  recall: handleRecall,
+  remember: handleRecall,
   time: handleTime,
   score: handleScore,
   stats: handleScore,
@@ -122,6 +125,7 @@ Condition:   wash/bathe (near water), rest/sleep
 Talk:        talk <npc> [message], say <message>, shout <message>
              whisper <player> <message>, gossip <message>
 NPCs:        context <npc> - see NPC's feelings and desires
+             recall <npc> - remember your relationship history
 Social:      smile, wave, bow, etc. (type 'socials' for list)
              You can also create new socials by using them!
 Follow:      follow <target>, unfollow, group

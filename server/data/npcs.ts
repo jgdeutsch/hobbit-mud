@@ -12,6 +12,8 @@ export const NPC_TEMPLATES: NpcTemplate[] = [
     backstory: 'The most respectable hobbit in Hobbiton, Bilbo lives alone in Bag End, the finest hobbit-hole in the Shire. His mother Belladonna was a Took - a family known for being "adventurous." He has never done anything unexpected in his life. Until now.',
     speechStyle: 'Polite, slightly pompous, prone to exclaiming "Good gracious!" and "Bless my soul!" Uses proper grammar.',
     homeRoom: 'bag_end_hall',
+    extroversion: 35, // Somewhat introverted, prefers peace and quiet
+    importantTopics: ['bag end', 'adventure', 'dwarves', 'gandalf', 'respectability', 'tooks', 'baggins'],
   },
   {
     id: 2,
@@ -23,6 +25,8 @@ export const NPC_TEMPLATES: NpcTemplate[] = [
     backstory: 'The wandering wizard, known throughout Middle-earth. He was once a friend of Bilbo\'s mother and has memories of Bilbo as a young hobbit. He has come to Hobbiton seeking... something.',
     speechStyle: 'Enigmatic, sometimes stern, often amused. Speaks in riddles and half-answers. "A wizard is never late..."',
     homeRoom: 'bag_end_garden',
+    extroversion: 55, // Moderate - speaks when he has something important to say
+    importantTopics: ['adventure', 'dwarves', 'thorin', 'erebor', 'dragon', 'smaug', 'burglar', 'quest', 'bilbo'],
   },
   {
     id: 3,
@@ -34,6 +38,8 @@ export const NPC_TEMPLATES: NpcTemplate[] = [
     backstory: 'Hamfast "Gaffer" Gamgee has tended the gardens at Bag End for years. He lives at Number 3 Bagshot Row with his family, including young Samwise. He knows every plant in the Shire.',
     speechStyle: 'Rural Shire dialect. Complains constantly but means well. "Begging your pardon..." and "If you take my meaning."',
     homeRoom: 'bag_end_garden',
+    extroversion: 70, // Loves to gossip and chat
+    importantTopics: ['garden', 'potatoes', 'plants', 'bilbo', 'baggins', 'samwise', 'gossip', 'weather'],
   },
   {
     id: 4,
@@ -45,6 +51,8 @@ export const NPC_TEMPLATES: NpcTemplate[] = [
     backstory: 'A relative of Bilbo who has long coveted Bag End. She married Otho Sackville-Baggins and together they scheme to get their hands on Bilbo\'s property. She is convinced Bilbo stole her rightful inheritance.',
     speechStyle: 'Snide, pointed remarks. Always implies she deserves better. "Well, I NEVER!" and passive-aggressive comments.',
     homeRoom: 'hobbiton_village',
+    extroversion: 85, // Very nosy and loves to insert herself into conversations
+    importantTopics: ['bag end', 'bilbo', 'spoons', 'silver', 'inheritance', 'property', 'baggins'],
   },
   {
     id: 5,
@@ -56,6 +64,8 @@ export const NPC_TEMPLATES: NpcTemplate[] = [
     backstory: 'Married to Lobelia, Otho shares her obsession with Bag End. He considers himself the rightful heir to everything Baggins.',
     speechStyle: 'Pompous, self-important. Clears his throat before speaking. Uses long words incorrectly.',
     homeRoom: 'hobbiton_village',
+    extroversion: 65, // Pompous and likes to be heard
+    importantTopics: ['bag end', 'bilbo', 'inheritance', 'property', 'baggins', 'lobelia'],
   },
   {
     id: 6,
@@ -67,6 +77,8 @@ export const NPC_TEMPLATES: NpcTemplate[] = [
     backstory: 'The most respected farmer in the Marish. His mushrooms are legendary, and so is his temper when he catches anyone stealing them. He has three dogs: Grip, Fang, and Wolf.',
     speechStyle: 'Direct, blunt, country speech. Threatens trespassers but is hospitable to honest folk.',
     homeRoom: 'farmer_maggots_fields',
+    extroversion: 40, // Gruff, doesn't talk much unless provoked
+    importantTopics: ['mushrooms', 'thieves', 'crops', 'dogs', 'farm', 'trespassers'],
   },
   {
     id: 7,
@@ -78,6 +90,8 @@ export const NPC_TEMPLATES: NpcTemplate[] = [
     backstory: 'The miller\'s son, Ted runs Sandyman\'s Mill. He resents the Bagginses and their wealth, and spreads rumors about "mad Baggins."',
     speechStyle: 'Sneering, dismissive. Makes snide comments. "That\'s what I heard, anyway..."',
     homeRoom: 'the_mill',
+    extroversion: 60, // Likes to spread gossip and make snide remarks
+    importantTopics: ['bilbo', 'baggins', 'mad', 'gossip', 'mill', 'rumors'],
   },
   {
     id: 8,
@@ -89,6 +103,8 @@ export const NPC_TEMPLATES: NpcTemplate[] = [
     backstory: 'Has run the Green Dragon for decades. Knows every regular by name and drink preference. The hub of all Hobbiton gossip.',
     speechStyle: 'Cheerful, welcoming. "What\'ll it be?" and "Have you heard the one about..."',
     homeRoom: 'the_green_dragon',
+    extroversion: 90, // Very sociable, loves to chat with everyone
+    importantTopics: ['ale', 'stories', 'gossip', 'news', 'travelers', 'songs'],
   },
   {
     id: 9,
@@ -100,6 +116,8 @@ export const NPC_TEMPLATES: NpcTemplate[] = [
     backstory: 'One of the oldest hobbits in Hobbiton. He remembers Bilbo\'s grandfather and tells stories of the old days to anyone who will listen.',
     speechStyle: 'Rambling, nostalgic. "In my day..." and "That reminds me of the time..."',
     homeRoom: 'hobbiton_village',
+    extroversion: 75, // Lonely, loves company and talking
+    importantTopics: ['old days', 'history', 'bilbo', 'grandfather', 'stories', 'tea'],
   },
 
   // THE THIRTEEN DWARVES
@@ -116,6 +134,8 @@ export const NPC_TEMPLATES: NpcTemplate[] = [
     homeRoom: 'bag_end_hall',
     arrivalHour: 1,
     arrivalGroup: 'first',
+    extroversion: 20, // Very taciturn
+    importantTopics: ['battle', 'orcs', 'thorin', 'erebor', 'axes', 'fight'],
   },
   {
     id: 11,
@@ -129,6 +149,8 @@ export const NPC_TEMPLATES: NpcTemplate[] = [
     homeRoom: 'bag_end_hall',
     arrivalHour: 2,
     arrivalGroup: 'second',
+    extroversion: 60, // Diplomatic and approachable
+    importantTopics: ['erebor', 'thorin', 'quest', 'dwarves', 'mountain', 'smaug'],
   },
   {
     id: 12,
@@ -142,6 +164,8 @@ export const NPC_TEMPLATES: NpcTemplate[] = [
     homeRoom: 'bag_end_hall',
     arrivalHour: 3,
     arrivalGroup: 'third',
+    extroversion: 70, // Young and eager
+    importantTopics: ['kili', 'thorin', 'adventure', 'knives', 'uncle'],
   },
   {
     id: 13,
@@ -155,6 +179,8 @@ export const NPC_TEMPLATES: NpcTemplate[] = [
     homeRoom: 'bag_end_hall',
     arrivalHour: 3,
     arrivalGroup: 'third',
+    extroversion: 80, // Most enthusiastic
+    importantTopics: ['fili', 'thorin', 'adventure', 'bow', 'beard'],
   },
   {
     id: 14,
@@ -168,6 +194,8 @@ export const NPC_TEMPLATES: NpcTemplate[] = [
     homeRoom: 'bag_end_hall',
     arrivalHour: 4,
     arrivalGroup: 'fourth',
+    extroversion: 50, // Fussy but not overly talkative
+    importantTopics: ['ori', 'nori', 'safety', 'comfort', 'food'],
   },
   {
     id: 15,
@@ -181,6 +209,8 @@ export const NPC_TEMPLATES: NpcTemplate[] = [
     homeRoom: 'bag_end_hall',
     arrivalHour: 4,
     arrivalGroup: 'fourth',
+    extroversion: 35, // Sneaky, keeps to himself
+    importantTopics: ['treasure', 'gold', 'valuables', 'secrets'],
   },
   {
     id: 16,
@@ -194,6 +224,8 @@ export const NPC_TEMPLATES: NpcTemplate[] = [
     homeRoom: 'bag_end_hall',
     arrivalHour: 4,
     arrivalGroup: 'fourth',
+    extroversion: 55, // Curious and asks questions
+    importantTopics: ['writing', 'notes', 'history', 'stories'],
   },
   {
     id: 17,
@@ -207,6 +239,8 @@ export const NPC_TEMPLATES: NpcTemplate[] = [
     homeRoom: 'bag_end_hall',
     arrivalHour: 5,
     arrivalGroup: 'fifth',
+    extroversion: 45, // Hard of hearing limits conversation
+    importantTopics: ['omens', 'portents', 'medicine', 'healing'],
   },
   {
     id: 18,
@@ -220,6 +254,8 @@ export const NPC_TEMPLATES: NpcTemplate[] = [
     homeRoom: 'bag_end_hall',
     arrivalHour: 5,
     arrivalGroup: 'fifth',
+    extroversion: 55, // Proud and will speak about family/honor
+    importantTopics: ['gold', 'money', 'gimli', 'family', 'honor'],
   },
   {
     id: 19,
@@ -233,6 +269,8 @@ export const NPC_TEMPLATES: NpcTemplate[] = [
     homeRoom: 'bag_end_hall',
     arrivalHour: 5,
     arrivalGroup: 'fifth',
+    extroversion: 25, // Can't speak Westron, limited communication
+    importantTopics: ['bofur', 'bombur', 'orcs'],
   },
   {
     id: 20,
@@ -246,6 +284,8 @@ export const NPC_TEMPLATES: NpcTemplate[] = [
     homeRoom: 'bag_end_hall',
     arrivalHour: 5,
     arrivalGroup: 'fifth',
+    extroversion: 85, // Most cheerful and talkative
+    importantTopics: ['songs', 'jokes', 'adventure', 'mining'],
   },
   {
     id: 21,
@@ -259,6 +299,8 @@ export const NPC_TEMPLATES: NpcTemplate[] = [
     homeRoom: 'bag_end_hall',
     arrivalHour: 5,
     arrivalGroup: 'fifth',
+    extroversion: 40, // Mostly interested in food, not conversation
+    importantTopics: ['food', 'dinner', 'breakfast', 'hungry', 'cooking'],
   },
   {
     id: 22,
@@ -272,6 +314,8 @@ export const NPC_TEMPLATES: NpcTemplate[] = [
     homeRoom: 'bag_end_hall',
     arrivalHour: 6,
     arrivalGroup: 'final',
+    extroversion: 30, // Brooding, speaks when necessary
+    importantTopics: ['erebor', 'smaug', 'dragon', 'mountain', 'king', 'quest', 'burglar', 'thror', 'thrain'],
   },
 ];
 

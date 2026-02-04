@@ -1,9 +1,15 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { NpcTemplate, SocialDefinition, Player } from '../../shared/types';
 import * as dotenv from 'dotenv';
+import * as path from 'path';
 
 // Load environment variables from .env file
-dotenv.config();
+// Use path relative to project root (handles both dev and production)
+const projectRoot = __dirname.includes('dist')
+  ? path.join(__dirname, '..', '..', '..')  // Production: dist/server/services -> project root
+  : path.join(__dirname, '..', '..');       // Development: server/services -> project root
+
+dotenv.config({ path: path.join(projectRoot, '.env') });
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 if (!GEMINI_API_KEY) {
@@ -15,7 +21,7 @@ const model = genAI.getGenerativeModel({
   model: 'gemini-2.0-flash',
   generationConfig: {
     temperature: 0.8,
-    maxOutputTokens: 500,
+    maxOutputTokens: 150,  // Keep responses short
   },
 });
 
@@ -83,8 +89,7 @@ ${context.playerAppearance.npcReaction.respect > 10 ? `- Their fine attire comma
 
 The player ${player.name} says: "${playerMessage}"
 
-Respond as ${npc.name} would. Keep your response SHORT (1-3 sentences) and in character. Include your character's speech mannerisms. If relevant, mention your current desire or feelings. If you don't know something, stay in character about it.
-IMPORTANT: React to the player's appearance! If they look wealthy, be more deferential. If they look poor or dirty, be more dismissive. If they're bloody or wounded, show concern or fear.`;
+Respond as ${npc.name} would. Keep it VERY SHORT (1 sentence, max 15 words). Stay in character. React to their appearance if notable.`;
 
   try {
     const result = await model.generateContent(prompt);
@@ -238,12 +243,7 @@ ${npc2Context?.recentMemories?.length ? `- Recent events: ${npc2Context.recentMe
 
 Context: ${context}
 
-Generate 2-4 short lines of natural dialogue/actions between them. Include actions in *asterisks*. The dialogue should:
-- Reflect their personalities and current moods
-- Be appropriate for the Shire setting
-- Occasionally reference their desires or recent events
-- Feel natural, not forced
-
+Generate 2 very brief exchanges between them. Keep each line under 12 words. Actions in *asterisks*.
 Respond in this exact JSON format:
 [
   {"speaker": 1, "dialogue": "...", "action": "*optional action*"},
@@ -345,7 +345,7 @@ SITUATION:
 - Reason you're speaking: ${reason}
 ${otherNpcsPresent.length ? `- Others present: ${otherNpcsPresent.join(', ')}` : ''}
 
-Generate what ${npc.name} says to ${player.name}. Keep it SHORT (1-2 sentences). Stay in character with your speech style. You may include an action in *asterisks*.
+Generate what ${npc.name} says. Keep it VERY SHORT (1 sentence, max 12 words). Action in *asterisks* optional.
 
 Respond with JSON only:
 {"dialogue": "what you say", "action": "*optional action*"}`;
@@ -391,6 +391,101 @@ Just respond with the summary, no quotes or extra text.`;
   }
 }
 
+/**
+ * Generate an NPC's reaction to a witnessed event
+ */
+export async function generateNpcReaction(
+  npc: NpcTemplate,
+  event: { type: string; actor: { name: string }; target?: { name: string }; content: string },
+  context: string,
+  isDirectlyAddressed: boolean
+): Promise<string> {
+  const prompt = `You are ${npc.name} in a Hobbit-themed MUD. You have just witnessed something happen.
+
+CHARACTER:
+- Name: ${npc.name}
+- Personality: ${npc.personality}
+- Speech style: ${npc.speechStyle}
+
+CONTEXT:
+${context}
+
+WHAT HAPPENED:
+${event.actor.name} ${event.type === 'say' ? 'said' : event.type === 'emote' ? 'did' : 'performed'}: "${event.content}"
+${event.target ? `(directed at ${event.target.name})` : '(to the room in general)'}
+
+${isDirectlyAddressed
+    ? 'You MUST respond. Keep it under 12 words.'
+    : 'Only react if it fits your personality. To stay silent, respond with "..."'}
+
+Respond with ONLY what you say (under 12 words) or do (*action*). Or "..." to stay silent.`;
+
+  try {
+    const result = await model.generateContent(prompt);
+    const response = result.response.text().trim();
+
+    // If NPC chooses to stay silent
+    if (response === '...' || response === '"..."' || response.length < 3) {
+      return '';
+    }
+
+    // Clean up the response
+    let cleaned = response.replace(/^["']|["']$/g, '').trim();
+    return cleaned;
+  } catch (error) {
+    console.error('Gemini reaction error:', error);
+    return '';
+  }
+}
+
+/**
+ * Detect if player is asking for directions or a guide
+ */
+export async function detectGuideRequest(
+  playerMessage: string,
+  availableLocations: string[]
+): Promise<{ isGuideRequest: boolean; destination?: string }> {
+  const prompt = `Analyze if this message is asking for directions or to be guided somewhere.
+
+Player says: "${playerMessage}"
+
+Known locations: ${availableLocations.join(', ')}
+
+If the player is asking how to get somewhere, asking for directions, or asking to be shown/led/guided somewhere, respond with the destination.
+
+Respond with JSON only:
+{"is_guide_request": true/false, "destination": "location name or null"}`;
+
+  try {
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return { isGuideRequest: false };
+
+    const data = JSON.parse(jsonMatch[0]);
+    return {
+      isGuideRequest: data.is_guide_request === true,
+      destination: data.destination || undefined,
+    };
+  } catch (error) {
+    console.error('Gemini guide detection error:', error);
+    return { isGuideRequest: false };
+  }
+}
+
+/**
+ * Generate NPC response when agreeing to guide
+ */
+export function generateGuideAcceptResponse(npcName: string, destination: string): string {
+  const responses = [
+    `Follow me to ${destination}.`,
+    `Come, I'll show you the way to ${destination}.`,
+    `This way to ${destination}. Stay close.`,
+    `The ${destination}? Follow me.`,
+  ];
+  return responses[Math.floor(Math.random() * responses.length)];
+}
+
 export default {
   generateNpcDialogue,
   generateSocialEmote,
@@ -399,4 +494,7 @@ export default {
   generateMemorySummary,
   shouldNpcInitiateWithPlayer,
   generateNpcInitiatedDialogue,
+  generateNpcReaction,
+  detectGuideRequest,
+  generateGuideAcceptResponse,
 };

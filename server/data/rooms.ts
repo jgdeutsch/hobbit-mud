@@ -35,8 +35,21 @@ export const ROOMS: Record<string, Room> = {
         description: 'Neat rows of potatoes, beans, and other vegetables. The Gaffer takes great pride in them.',
         takeable: false,
       },
+      {
+        name: 'garden shed',
+        keywords: ['shed', 'garden shed', 'tool shed'],
+        description: 'A small wooden shed tucked behind the vegetable patches. Inside you can see gardening tools - rakes, hoes, and a pair of old pruning shears hanging on a hook.',
+        takeable: false,
+      },
+      {
+        name: 'pruning shears',
+        keywords: ['shears', 'pruning shears', 'old shears'],
+        description: 'A pair of old pruning shears hanging in the shed. They look well-used but the blades are dull and nicked. The Gaffer could probably use a new pair.',
+        takeable: true,
+        itemTemplateId: 16,
+      },
     ],
-    items: [],
+    items: [16], // Pruning shears in the shed
   },
 
   bag_end_hall: {

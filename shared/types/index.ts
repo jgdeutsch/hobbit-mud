@@ -29,6 +29,8 @@ export interface NpcTemplate {
   homeRoom: string;
   arrivalHour?: number; // for dwarves - when they arrive
   arrivalGroup?: string; // for grouping dwarf arrivals
+  extroversion: number; // 0-100: 0=very introverted, 100=very extroverted - affects chance to comment on general statements
+  importantTopics?: string[]; // topics this NPC cares about and will react to even if not addressed
 }
 
 export interface NpcState {

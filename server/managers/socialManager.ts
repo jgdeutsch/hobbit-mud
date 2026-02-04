@@ -176,6 +176,15 @@ const BASE_SOCIALS: SocialDefinition[] = [
     withTargetOthers: '{actor} grumbles at {target}.',
   },
   {
+    name: 'point',
+    sentiment: 'neutral',
+    noTargetSelf: 'You point into the distance.',
+    noTargetOthers: '{actor} points into the distance.',
+    withTargetSelf: 'You point a friendly finger at {target}.',
+    withTargetTarget: '{actor} points a friendly finger at you.',
+    withTargetOthers: '{actor} points a friendly finger at {target}.',
+  },
+  {
     name: 'yawn',
     sentiment: 'neutral',
     noTargetSelf: 'You yawn sleepily.',

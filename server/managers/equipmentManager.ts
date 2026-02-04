@@ -244,6 +244,27 @@ class EquipmentManager {
     const db = getDb();
     db.prepare('INSERT OR IGNORE INTO player_equipment (player_id) VALUES (?)').run(playerId);
   }
+
+  // Get visible equipment items as descriptions (for looking at another player)
+  getVisibleEquipmentDescriptions(playerId: number): string[] {
+    const equipment = this.getEquipment(playerId);
+    const visible: string[] = [];
+
+    // List visible slots (most equipment is visible except ring sometimes)
+    const visibleSlots: EquipmentSlot[] = ['head', 'cloak', 'torso', 'body', 'hands', 'legs', 'feet', 'mainHand', 'offHand'];
+
+    for (const slot of visibleSlots) {
+      const itemId = equipment[slot];
+      if (itemId) {
+        const item = getItemTemplate(itemId);
+        if (item) {
+          visible.push(item.shortDesc);
+        }
+      }
+    }
+
+    return visible;
+  }
 }
 
 export const equipmentManager = new EquipmentManager();
