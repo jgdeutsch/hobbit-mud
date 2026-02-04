@@ -169,32 +169,57 @@ Only respond with the JSON, no other text.`;
   }
 }
 
+export interface NpcFullContext {
+  mood: string;
+  currentDesire?: string;
+  desireReason?: string;
+  recentMemories?: string[];
+  feelingsToward?: Record<string, { trust: number; affection: number }>;
+}
+
 /**
- * Generate NPC-to-NPC interaction dialogue
+ * Generate NPC-to-NPC interaction dialogue with full context
  */
 export async function generateNpcToNpcDialogue(
   npc1: NpcTemplate,
   npc2: NpcTemplate,
-  context: string
-): Promise<{ speaker: number; dialogue: string }[]> {
+  context: string,
+  npc1Context?: NpcFullContext,
+  npc2Context?: NpcFullContext,
+  playersPresent?: string[],
+  roomDescription?: string
+): Promise<{ speaker: number; dialogue: string; action?: string }[]> {
   const prompt = `Generate a short interaction between two NPCs in a Hobbit-themed MUD set in The Shire.
+
+LOCATION: ${roomDescription || 'The Shire'}
+PLAYERS WATCHING: ${playersPresent?.join(', ') || 'A traveler'}
 
 NPC 1: ${npc1.name}
 - Personality: ${npc1.personality}
 - Speech style: ${npc1.speechStyle}
+- Current mood: ${npc1Context?.mood || 'neutral'}
+${npc1Context?.currentDesire ? `- Wants: ${npc1Context.currentDesire}` : ''}
+${npc1Context?.recentMemories?.length ? `- Recent events: ${npc1Context.recentMemories.slice(0, 2).join('; ')}` : ''}
 
 NPC 2: ${npc2.name}
 - Personality: ${npc2.personality}
 - Speech style: ${npc2.speechStyle}
+- Current mood: ${npc2Context?.mood || 'neutral'}
+${npc2Context?.currentDesire ? `- Wants: ${npc2Context.currentDesire}` : ''}
+${npc2Context?.recentMemories?.length ? `- Recent events: ${npc2Context.recentMemories.slice(0, 2).join('; ')}` : ''}
 
 Context: ${context}
 
-Generate 2-3 short lines of dialogue (max 15 words each) between them. The dialogue should reflect their personalities and be appropriate for the setting.
+Generate 2-4 short lines of natural dialogue/actions between them. Include actions in *asterisks*. The dialogue should:
+- Reflect their personalities and current moods
+- Be appropriate for the Shire setting
+- Occasionally reference their desires or recent events
+- Feel natural, not forced
 
 Respond in this exact JSON format:
 [
-  {"speaker": 1, "dialogue": "..."},
-  {"speaker": 2, "dialogue": "..."}
+  {"speaker": 1, "dialogue": "...", "action": "*optional action*"},
+  {"speaker": 2, "dialogue": "...", "action": "*optional action*"}
 ]
 
 Only respond with the JSON array, no other text.`;
@@ -210,6 +235,108 @@ Only respond with the JSON array, no other text.`;
   } catch (error) {
     console.error('Gemini NPC dialogue error:', error);
     return [];
+  }
+}
+
+/**
+ * Decide if an NPC should initiate interaction with a player
+ */
+export async function shouldNpcInitiateWithPlayer(
+  npc: NpcTemplate,
+  player: Player,
+  npcContext: NpcFullContext,
+  roomDescription: string,
+  otherNpcsPresent: string[],
+  otherPlayersPresent: string[]
+): Promise<{ shouldInitiate: boolean; reason?: string }> {
+  const prompt = `You are ${npc.name} in a Hobbit-themed MUD. Decide if you should spontaneously speak to the player.
+
+YOUR CHARACTER:
+- Name: ${npc.name}
+- Personality: ${npc.personality}
+- Current mood: ${npcContext.mood}
+${npcContext.currentDesire ? `- You want: ${npcContext.currentDesire} (${npcContext.desireReason || ''})` : ''}
+${npcContext.feelingsToward?.[player.name] ? `- Your feelings toward ${player.name}: Trust ${npcContext.feelingsToward[player.name].trust}/100, Affection ${npcContext.feelingsToward[player.name].affection}/100` : `- You don't know ${player.name} well yet`}
+${npcContext.recentMemories?.length ? `- Recent memories: ${npcContext.recentMemories.slice(0, 3).join('; ')}` : ''}
+
+SITUATION:
+- Location: ${roomDescription}
+- Player present: ${player.name}
+${otherPlayersPresent.length ? `- Other players: ${otherPlayersPresent.join(', ')}` : ''}
+${otherNpcsPresent.length ? `- Other NPCs here: ${otherNpcsPresent.join(', ')}` : ''}
+
+Would ${npc.name} spontaneously say something to ${player.name} right now? Consider:
+- Is there a reason to speak (desire, greeting, gossip, warning)?
+- Does your personality make you talkative or reserved?
+- Is this an appropriate moment?
+
+Respond with JSON only:
+{"should_initiate": true/false, "reason": "brief reason why or why not"}`;
+
+  try {
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return { shouldInitiate: false };
+
+    const data = JSON.parse(jsonMatch[0]);
+    return {
+      shouldInitiate: data.should_initiate === true,
+      reason: data.reason,
+    };
+  } catch (error) {
+    console.error('Gemini initiation check error:', error);
+    return { shouldInitiate: false };
+  }
+}
+
+/**
+ * Generate proactive NPC dialogue to a player
+ */
+export async function generateNpcInitiatedDialogue(
+  npc: NpcTemplate,
+  player: Player,
+  npcContext: NpcFullContext,
+  reason: string,
+  roomDescription: string,
+  otherNpcsPresent: string[]
+): Promise<{ dialogue: string; action?: string }> {
+  const prompt = `You are ${npc.name} in a Hobbit-themed MUD, spontaneously speaking to ${player.name}.
+
+YOUR CHARACTER:
+- Name: ${npc.name}
+- Personality: ${npc.personality}
+- Speech style: ${npc.speechStyle}
+- Current mood: ${npcContext.mood}
+${npcContext.currentDesire ? `- You want: ${npcContext.currentDesire}` : ''}
+${npcContext.feelingsToward?.[player.name] ? `- Feelings toward ${player.name}: Trust ${npcContext.feelingsToward[player.name].trust}/100, Affection ${npcContext.feelingsToward[player.name].affection}/100` : ''}
+
+SITUATION:
+- Location: ${roomDescription}
+- Reason you're speaking: ${reason}
+${otherNpcsPresent.length ? `- Others present: ${otherNpcsPresent.join(', ')}` : ''}
+
+Generate what ${npc.name} says to ${player.name}. Keep it SHORT (1-2 sentences). Stay in character with your speech style. You may include an action in *asterisks*.
+
+Respond with JSON only:
+{"dialogue": "what you say", "action": "*optional action*"}`;
+
+  try {
+    const result = await model.generateContent(prompt);
+    const text = result.response.text();
+
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return { dialogue: `${npc.name} glances at you.` };
+
+    const data = JSON.parse(jsonMatch[0]);
+    return {
+      dialogue: data.dialogue,
+      action: data.action,
+    };
+  } catch (error) {
+    console.error('Gemini initiated dialogue error:', error);
+    return { dialogue: `${npc.name} seems about to say something but hesitates.` };
   }
 }
 
@@ -242,4 +369,6 @@ export default {
   generateNpcDesire,
   generateNpcToNpcDialogue,
   generateMemorySummary,
+  shouldNpcInitiateWithPlayer,
+  generateNpcInitiatedDialogue,
 };
