@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Hobbit: A MUD in the Shire</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Courier New', monospace;
+      background: #1a1a1a;
+      color: #c0c0c0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    #header {
+      background: #2d2d2d;
+      padding: 10px 20px;
+      border-bottom: 1px solid #444;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    #header h1 {
+      color: #8fbc8f;
+      font-size: 1.2em;
+    }
+
+    #status {
+      font-size: 0.9em;
+    }
+
+    #status.connected {
+      color: #90EE90;
+    }
+
+    #status.disconnected {
+      color: #ff6b6b;
+    }
+
+    #output-container {
+      flex: 1;
+      overflow-y: auto;
+      padding: 15px 20px;
+      line-height: 1.5;
+    }
+
+    #output {
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
+    .system {
+      color: #87ceeb;
+    }
+
+    .error {
+      color: #ff6b6b;
+    }
+
+    .prompt {
+      color: #ffd700;
+    }
+
+    .room-name {
+      color: #98fb98;
+      font-weight: bold;
+    }
+
+    #input-container {
+      background: #2d2d2d;
+      padding: 15px 20px;
+      border-top: 1px solid #444;
+      display: flex;
+      gap: 10px;
+    }
+
+    #input {
+      flex: 1;
+      background: #1a1a1a;
+      border: 1px solid #444;
+      color: #c0c0c0;
+      font-family: inherit;
+      font-size: 1em;
+      padding: 10px 15px;
+      outline: none;
+    }
+
+    #input:focus {
+      border-color: #8fbc8f;
+    }
+
+    #send-btn {
+      background: #8fbc8f;
+      color: #1a1a1a;
+      border: none;
+      padding: 10px 20px;
+      cursor: pointer;
+      font-family: inherit;
+      font-weight: bold;
+    }
+
+    #send-btn:hover {
+      background: #90EE90;
+    }
+
+    /* Command history styling */
+    .command {
+      color: #ffd700;
+    }
+  </style>
+</head>
+<body>
+  <div id="header">
+    <h1>🧙 The Hobbit: A MUD in the Shire</h1>
+    <span id="status" class="disconnected">Disconnected</span>
+  </div>
+
+  <div id="output-container">
+    <div id="output"></div>
+  </div>
+
+  <div id="input-container">
+    <input type="text" id="input" placeholder="Enter command..." autofocus>
+    <button id="send-btn">Send</button>
+  </div>
+
+  <script>
+    const output = document.getElementById('output');
+    const input = document.getElementById('input');
+    const sendBtn = document.getElementById('send-btn');
+    const status = document.getElementById('status');
+    const container = document.getElementById('output-container');
+
+    let ws = null;
+    let commandHistory = [];
+    let historyIndex = -1;
+
+    function connect() {
+      ws = new WebSocket('ws://localhost:4000');
+
+      ws.onopen = () => {
+        status.textContent = 'Connected';
+        status.className = 'connected';
+        appendOutput('[Connected to The Shire]', 'system');
+      };
+
+      ws.onclose = () => {
+        status.textContent = 'Disconnected';
+        status.className = 'disconnected';
+        appendOutput('[Connection lost - refresh to reconnect]', 'error');
+      };
+
+      ws.onerror = (error) => {
+        console.error('WebSocket error:', error);
+        appendOutput('[Connection error]', 'error');
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data);
+          let className = '';
+
+          switch (msg.type) {
+            case 'system':
+              className = 'system';
+              break;
+            case 'error':
+              className = 'error';
+              break;
+            case 'prompt':
+              className = 'prompt';
+              break;
+            default:
+              className = '';
+          }
+
+          appendOutput(msg.content, className);
+        } catch (e) {
+          appendOutput(event.data, '');
+        }
+      };
+    }
+
+    function appendOutput(text, className) {
+      // Highlight room names
+      text = text.replace(/\[([^\]]+)\]/g, '<span class="room-name">[$1]</span>');
+
+      const span = document.createElement('span');
+      if (className) {
+        span.className = className;
+      }
+      span.innerHTML = text + '\n';
+      output.appendChild(span);
+
+      // Auto-scroll to bottom
+      container.scrollTop = container.scrollHeight;
+    }
+
+    function sendCommand() {
+      const cmd = input.value.trim();
+      if (!cmd || !ws || ws.readyState !== WebSocket.OPEN) return;
+
+      // Add to history
+      commandHistory.push(cmd);
+      historyIndex = commandHistory.length;
+
+      // Show command in output
+      appendOutput('> ' + cmd, 'command');
+
+      // Send to server
+      ws.send(cmd);
+      input.value = '';
+    }
+
+    // Event listeners
+    sendBtn.addEventListener('click', sendCommand);
+
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        sendCommand();
+      } else if (e.key === 'ArrowUp') {
+        // Navigate history up
+        if (historyIndex > 0) {
+          historyIndex--;
+          input.value = commandHistory[historyIndex];
+        }
+        e.preventDefault();
+      } else if (e.key === 'ArrowDown') {
+        // Navigate history down
+        if (historyIndex < commandHistory.length - 1) {
+          historyIndex++;
+          input.value = commandHistory[historyIndex];
+        } else {
+          historyIndex = commandHistory.length;
+          input.value = '';
+        }
+        e.preventDefault();
+      }
+    });
+
+    // Connect on load
+    connect();
+  </script>
+</body>
+</html>
