@@ -5,6 +5,7 @@ import { worldManager } from './worldManager';
 import geminiService from '../services/geminiService';
 import { gameLog } from '../services/logger';
 import { ITEM_TEMPLATES } from '../data/items';
+import { getNpcKnowledge, NPC_TEMPLATES } from '../data/npcs';
 
 export interface WitnessedEvent {
   type: 'say' | 'emote' | 'social' | 'action' | 'arrival' | 'departure';
@@ -703,6 +704,23 @@ class NpcReactionManager {
   }
 
   /**
+   * Find NPC knowledge relevant to a query
+   */
+  private findRelevantNpcKnowledge(npcId: number, query: string): string[] {
+    const allKnowledge = getNpcKnowledge(npcId);
+    if (allKnowledge.length === 0) return [];
+
+    // Keywords to search for in the query
+    const queryWords = query.toLowerCase().split(' ').filter(w => w.length > 3);
+
+    // Find knowledge entries that match query keywords
+    return allKnowledge.filter(knowledge => {
+      const knowledgeLower = knowledge.toLowerCase();
+      return queryWords.some(word => knowledgeLower.includes(word));
+    });
+  }
+
+  /**
    * Build context for reaction generation
    */
   private buildReactionContext(
@@ -780,7 +798,59 @@ class NpcReactionManager {
           if (mentionedLocation === 'shed' && state.currentRoom === 'bag_end_garden') {
             parts.push(`The shed is RIGHT HERE in this garden - just look around! Use "look shed" to see it.`);
           }
+
+          // Provide directions to other locations
+          if (mentionedLocation === 'mill') {
+            const directions = worldManager.getDirections(state.currentRoom, 'the_mill');
+            if (directions) {
+              parts.push(`The Mill is at: the_mill. Directions: ${directions}`);
+            }
+          }
         }
+      }
+    }
+
+    // Check if player is asking WHO can help or asking for referrals
+    const isAskingWho = contentLower.includes('who') ||
+                        contentLower.includes('anyone') ||
+                        contentLower.includes('someone') ||
+                        contentLower.includes('know of') ||
+                        contentLower.includes('can help');
+
+    if (isAskingWho) {
+      // Check NPC's knowledge for relevant info
+      const relevantKnowledge = this.findRelevantNpcKnowledge(npc.id, contentLower);
+      if (relevantKnowledge.length > 0) {
+        parts.push(`IMPORTANT: The player is asking who can help. You know the following:`);
+        relevantKnowledge.forEach(k => parts.push(`- ${k}`));
+        parts.push(`Share this knowledge! Refer them to the right person. Be helpful!`);
+      }
+
+      // If asking about sharpening specifically
+      if (contentLower.includes('sharpen')) {
+        parts.push(`IMPORTANT: Ted Sandyman at the Mill can sharpen tools and blades.`);
+        const directions = worldManager.getDirections(state.currentRoom, 'the_mill');
+        if (directions) {
+          parts.push(`The Mill is east of Hobbiton Village. Directions from here: ${directions}`);
+        }
+      }
+    }
+
+    // Check if asking "how" to do something related to the quest
+    const isAskingHow = contentLower.includes('how do i') ||
+                        contentLower.includes('how can i') ||
+                        contentLower.includes('how to');
+
+    if (isAskingHow && desire) {
+      // If asking how to complete the quest, be helpful!
+      if (contentLower.includes('sharpen') || contentLower.includes('shears') || contentLower.includes('tool')) {
+        parts.push(`IMPORTANT: Player is asking how to complete your task!`);
+        parts.push(`Ted Sandyman at the Mill can sharpen tools. He has a grindstone.`);
+        const directions = worldManager.getDirections(state.currentRoom, 'the_mill');
+        if (directions) {
+          parts.push(`The Mill is at: the_mill. Directions: ${directions}`);
+        }
+        parts.push(`Be HELPFUL - tell them to go to Ted Sandyman at the Mill!`);
       }
     }
 

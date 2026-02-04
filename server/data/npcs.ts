@@ -337,9 +337,9 @@ export const INITIAL_DESIRES: Partial<NpcDesire>[] = [
   },
   {
     npcTemplateId: 3, // Gaffer
-    desireType: 'item',
-    desireContent: 'New pruning shears',
-    desireReason: 'His old ones are getting dull',
+    desireType: 'action',
+    desireContent: 'Get shears sharpened',
+    desireReason: 'His old pruning shears are dull and need sharpening at the mill',
     priority: 7,
   },
   {
@@ -392,6 +392,64 @@ export const INITIAL_DESIRES: Partial<NpcDesire>[] = [
     priority: 10,
   },
 ];
+
+// Knowledge that NPCs have about who can help with specific tasks
+// This allows NPCs to refer players to the right person
+export const NPC_KNOWLEDGE: Record<number, { knows: string[] }> = {
+  // Gaffer knows about local services
+  3: { // Gaffer Gamgee
+    knows: [
+      'Ted Sandyman at the Mill can sharpen tools and blades',
+      'The Green Dragon Inn serves the best ale in Hobbiton',
+      'Mr. Bilbo Baggins is the master of Bag End',
+      'Farmer Maggot grows the finest mushrooms, but watch his dogs',
+    ],
+  },
+  // Bilbo knows many things
+  1: { // Bilbo
+    knows: [
+      'Gandalf the Grey is a wizard who visits from time to time',
+      'The Gaffer tends the gardens here at Bag End',
+      'Ted Sandyman runs the mill down by the Water',
+      'The Green Dragon Inn is where hobbits gather for news',
+    ],
+  },
+  // Gandalf knows much of the wider world
+  2: { // Gandalf
+    knows: [
+      'The Gaffer knows every plant in the Shire',
+      'Bilbo Baggins has more to him than meets the eye',
+      'The dwarves seek a burglar for their quest',
+      'Ted Sandyman at the mill is useful for practical matters',
+    ],
+  },
+  // Ted Sandyman knows mill-related things
+  7: { // Ted Sandyman
+    knows: [
+      'I can sharpen any blade or tool at my mill',
+      'The Gaffer is always fussing about his garden tools',
+      'Mad Baggins up on the hill has gold hidden, they say',
+    ],
+  },
+  // Green Dragon Innkeeper knows gossip
+  8: { // Innkeeper
+    knows: [
+      'The Gaffer comes in sometimes for an ale after gardening',
+      'That Sandyman lad at the mill is a right gossip',
+      'Mr. Bilbo throws the finest parties in the Shire',
+      'Farmer Maggot\'s mushrooms are worth the risk of his dogs',
+    ],
+  },
+};
+
+// Get what an NPC knows that's relevant to a topic
+export function getNpcKnowledge(npcId: number, topic?: string): string[] {
+  const knowledge = NPC_KNOWLEDGE[npcId]?.knows || [];
+  if (!topic) return knowledge;
+
+  const topicLower = topic.toLowerCase();
+  return knowledge.filter(k => k.toLowerCase().includes(topicLower));
+}
 
 export function getNpcTemplate(id: number): NpcTemplate | undefined {
   return NPC_TEMPLATES.find(npc => npc.id === id);
