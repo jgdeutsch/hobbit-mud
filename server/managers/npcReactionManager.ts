@@ -21,10 +21,25 @@ interface ConversationContext {
   timestamp: number;
 }
 
+// Track pending quest offers waiting for player acceptance
+interface PendingQuestOffer {
+  npcId: number;
+  npcName: string;
+  playerId: number;
+  playerName: string;
+  roomId: string;
+  desire: { desireType: string; desireContent: string; desireReason?: string };
+  timestamp: number;
+}
+
 class NpcReactionManager {
   // Track recent NPC-to-player conversations (for determining who should respond)
   private recentConversations: Map<string, ConversationContext> = new Map(); // key: `${roomId}-${playerId}`
   private conversationTimeout = 30000; // 30 seconds to consider it the same conversation
+
+  // Track pending quest offers (NPC offered quest, waiting for player to accept)
+  private pendingQuestOffers: Map<string, PendingQuestOffer> = new Map(); // key: `${roomId}-${playerId}`
+  private questOfferTimeout = 60000; // 60 seconds to accept a quest offer
   // Common greeting words that should prompt NPC responses
   private greetingPatterns = [
     'hello', 'hi', 'hey', 'greetings', 'good morning', 'good afternoon',
@@ -51,6 +66,24 @@ class NpcReactionManager {
     'that sounds', 'sounds good', 'sounds like', 'i see', 'i understand',
     'thank you', 'thanks', 'please', 'allow me', 'let me', 'i can', 'i could',
     'why', 'how', 'what', 'when', 'where', 'who', 'really', 'truly'
+  ];
+
+  // Quest acceptance patterns - player agreeing to help
+  private questAcceptPatterns = [
+    'yes', 'yeah', 'yep', 'sure', 'okay', 'ok', 'alright',
+    'i can help', 'i\'ll help', 'i will help', 'i can do that',
+    'i\'ll do it', 'i will do it', 'count me in', 'happy to help',
+    'of course', 'certainly', 'absolutely', 'gladly', 'definitely',
+    'what do you need', 'tell me more', 'what is it', 'go on',
+    'how can i help', 'what can i do', 'sure thing', 'you got it',
+    'no problem', 'i\'m in', 'let\'s do it', 'sounds good'
+  ];
+
+  // Quest decline patterns - player refusing
+  private questDeclinePatterns = [
+    'no', 'nope', 'nah', 'no thanks', 'not now', 'not interested',
+    'can\'t', 'cannot', 'i can\'t', 'too busy', 'maybe later',
+    'sorry', 'afraid not', 'not right now', 'pass', 'i\'ll pass'
   ];
 
   /**
@@ -125,6 +158,63 @@ class NpcReactionManager {
         this.recentConversations.delete(key);
       }
     }
+    // Also cleanup old quest offers
+    for (const [key, offer] of this.pendingQuestOffers.entries()) {
+      if (now - offer.timestamp > this.questOfferTimeout) {
+        this.pendingQuestOffers.delete(key);
+      }
+    }
+  }
+
+  /**
+   * Check if player is accepting a quest offer
+   */
+  private isAcceptingQuest(content: string): boolean {
+    const lower = content.toLowerCase().trim();
+    return this.questAcceptPatterns.some(p => lower.includes(p));
+  }
+
+  /**
+   * Check if player is declining a quest offer
+   */
+  private isDecliningQuest(content: string): boolean {
+    const lower = content.toLowerCase().trim();
+    // Only match decline if it's at the start or is the whole message
+    return this.questDeclinePatterns.some(p =>
+      lower === p || lower.startsWith(p + ' ') || lower.startsWith(p + ',')
+    );
+  }
+
+  /**
+   * Get pending quest offer for a player in a room
+   */
+  private getPendingQuestOffer(roomId: string, playerId: number): PendingQuestOffer | null {
+    const key = `${roomId}-${playerId}`;
+    const offer = this.pendingQuestOffers.get(key);
+    if (!offer) return null;
+
+    // Check if still valid
+    if (Date.now() - offer.timestamp > this.questOfferTimeout) {
+      this.pendingQuestOffers.delete(key);
+      return null;
+    }
+    return offer;
+  }
+
+  /**
+   * Store a pending quest offer
+   */
+  private storePendingQuestOffer(offer: PendingQuestOffer): void {
+    const key = `${offer.roomId}-${offer.playerId}`;
+    this.pendingQuestOffers.set(key, offer);
+  }
+
+  /**
+   * Clear a pending quest offer
+   */
+  private clearPendingQuestOffer(roomId: string, playerId: number): void {
+    const key = `${roomId}-${playerId}`;
+    this.pendingQuestOffers.delete(key);
   }
 
   /**
@@ -341,13 +431,38 @@ class NpcReactionManager {
     try {
       const isDirectlyAddressed = event.target?.type === 'npc' && event.target.id === npc.id;
 
+      // FIRST: Check if there's a pending quest offer from this NPC to this player
+      if (event.actor.type === 'player') {
+        const pendingOffer = this.getPendingQuestOffer(event.roomId, event.actor.id);
+
+        if (pendingOffer && pendingOffer.npcId === npc.id) {
+          // Player is responding to a quest offer
+          if (this.isAcceptingQuest(event.content)) {
+            // Player accepted - give full quest details
+            this.clearPendingQuestOffer(event.roomId, event.actor.id);
+            return await this.generateQuestDetails(npc, event, pendingOffer.desire);
+          } else if (this.isDecliningQuest(event.content)) {
+            // Player declined
+            this.clearPendingQuestOffer(event.roomId, event.actor.id);
+            connectionManager.sendToRoom(event.roomId, {
+              type: 'output',
+              content: `\n${npc.name} says: "No worries, if you take my meaning. Perhaps another time."\n`,
+            });
+            this.recordNpcSpokeToPlayer(event.roomId, npc.id, npc.name, event.actor.id, "No worries, perhaps another time.");
+            return true;
+          }
+          // If neither accept nor decline, continue with normal response
+          // but the offer stays pending
+        }
+      }
+
       // Check if player is asking about work/quests and NPC has a desire
       const desire = npcManager.getCurrentDesire(npc.id);
       const isAskingAboutWork = geminiService.isAskingAboutWork(event.content);
 
       if (isAskingAboutWork && desire && event.actor.type === 'player') {
-        // Trigger quest introduction flow
-        return await this.generateQuestIntroduction(npc, event, {
+        // Offer the quest (hook only, wait for acceptance)
+        return await this.offerQuest(npc, event, {
           desireType: desire.desireType,
           desireContent: desire.desireContent,
           desireReason: desire.desireReason || undefined,
@@ -416,9 +531,52 @@ class NpcReactionManager {
   }
 
   /**
-   * Generate and send a quest introduction - multiple messages explaining a quest
+   * Offer a quest to the player - just a hook, wait for acceptance
    */
-  private async generateQuestIntroduction(
+  private async offerQuest(
+    npc: NpcTemplate,
+    event: WitnessedEvent,
+    desire: { desireType: string; desireContent: string; desireReason?: string }
+  ): Promise<boolean> {
+    try {
+      // Generate a brief hook/offer based on NPC personality
+      const hookMessage = this.generateQuestHook(npc, event.actor.name);
+
+      connectionManager.sendToRoom(event.roomId, {
+        type: 'output',
+        content: `\n${npc.name} says: "${hookMessage}"\n`,
+      });
+
+      // Store the pending quest offer
+      if (event.actor.type === 'player') {
+        this.storePendingQuestOffer({
+          npcId: npc.id,
+          npcName: npc.name,
+          playerId: event.actor.id,
+          playerName: event.actor.name,
+          roomId: event.roomId,
+          desire,
+          timestamp: Date.now(),
+        });
+
+        this.recordNpcSpokeToPlayer(event.roomId, npc.id, npc.name, event.actor.id, hookMessage);
+      }
+
+      gameLog.log('NPC', 'QUEST-OFFER', `${npc.name} offered quest to ${event.actor.name}`, {
+        desire: desire.desireContent,
+      });
+
+      return true;
+    } catch (error) {
+      gameLog.error('NPC-QUEST-OFFER', error);
+      return false;
+    }
+  }
+
+  /**
+   * Generate full quest details after player accepts
+   */
+  private async generateQuestDetails(
     npc: NpcTemplate,
     event: WitnessedEvent,
     desire: { desireType: string; desireContent: string; desireReason?: string }
@@ -429,8 +587,6 @@ class NpcReactionManager {
       let directions: string | undefined;
 
       if (desire.desireType === 'item') {
-        // For now, hardcode some location hints based on the item
-        // TODO: Use actual world data and pathfinding
         const desireLower = desire.desireContent.toLowerCase();
         if (desireLower.includes('shears') || desireLower.includes('pruning')) {
           itemLocation = 'the garden shed here at Bag End';
@@ -452,7 +608,7 @@ class NpcReactionManager {
           type: 'output',
           content: `\n${npc.name} ${intro.action}\n`,
         });
-        await this.delay(800);
+        await this.delay(600);
       }
 
       // Send each message with a short delay between them
@@ -476,12 +632,12 @@ class NpcReactionManager {
 
         // Small delay between messages (but not after the last one)
         if (i < intro.messages.length - 1) {
-          await this.delay(1200);
+          await this.delay(1000);
         }
       }
 
-      // Log quest introduction
-      gameLog.log('NPC', 'QUEST-INTRO', `${npc.name} gave quest introduction to ${event.actor.name}`, {
+      // Log quest accepted
+      gameLog.log('NPC', 'QUEST-ACCEPTED', `${event.actor.name} accepted quest from ${npc.name}`, {
         desire: desire.desireContent,
       });
 
@@ -491,20 +647,59 @@ class NpcReactionManager {
           npc.id,
           'player',
           event.actor.id,
-          `Asked for help with: ${desire.desireContent}`,
+          `Accepted quest: ${desire.desireContent}`,
           7
         );
       }
 
       return true;
     } catch (error) {
-      gameLog.error('NPC-QUEST-INTRO', error);
+      gameLog.error('NPC-QUEST-DETAILS', error);
       return false;
     }
   }
 
   private delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Generate a quest hook based on NPC personality
+   */
+  private generateQuestHook(npc: NpcTemplate, playerName: string): string {
+    // NPC-specific hooks based on their personality/speech style
+    const npcHooks: Record<string, string[]> = {
+      'Gaffer Gamgee': [
+        `Aye, ${playerName}, I could use a hand with something, if you take my meaning. Interested?`,
+        `Matter of fact, ${playerName}, there is something. You willing to help an old gardener?`,
+        `Well now, ${playerName}, I do have a small matter. Care to hear it?`,
+      ],
+      'Gandalf the Grey': [
+        `Perhaps... there is something you could help with, ${playerName}. Are you willing?`,
+        `Hmm, yes. I may have need of your assistance. Interested?`,
+        `A task awaits, if you have the courage. Do you?`,
+      ],
+      'Lobelia Sackville-Baggins': [
+        `Well! Since you're asking, there IS something. Though I doubt you'd be any help.`,
+        `Hmph. I suppose you could assist me with a matter. If you're capable.`,
+        `Oh, DO you want to help? Well, perhaps you can. Want to hear it?`,
+      ],
+    };
+
+    // Check if we have specific hooks for this NPC
+    const hooks = npcHooks[npc.name];
+    if (hooks) {
+      return hooks[Math.floor(Math.random() * hooks.length)];
+    }
+
+    // Default hooks for other NPCs
+    const defaultHooks = [
+      `Aye, ${playerName}, I could use some help. Interested?`,
+      `Matter of fact, there is something. Want to hear it?`,
+      `I do have a task that needs doing. Care to help?`,
+      `Yes, I could use a hand with something. You willing?`,
+    ];
+    return defaultHooks[Math.floor(Math.random() * defaultHooks.length)];
   }
 
   /**
