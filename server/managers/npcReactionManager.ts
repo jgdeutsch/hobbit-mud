@@ -2,6 +2,7 @@ import { NpcTemplate, Player } from '../../shared/types';
 import { npcManager } from './npcManager';
 import { connectionManager } from './connectionManager';
 import { worldManager } from './worldManager';
+import { playerManager } from './playerManager';
 import geminiService from '../services/geminiService';
 import { gameLog } from '../services/logger';
 import { ITEM_TEMPLATES } from '../data/items';
@@ -738,7 +739,6 @@ class NpcReactionManager {
 
       // Check if player has the required item
       if (service.itemRequired) {
-        const { playerManager } = await import('./playerManager');
         const itemTemplate = worldManager.getItemTemplate(service.itemRequired);
         if (!itemTemplate) {
           return { handled: false, responded: false };
@@ -789,10 +789,8 @@ class NpcReactionManager {
 
       // Add a "sharpened" flag to the player somehow
       // For the Gaffer quest, we need to track that shears were sharpened
-      // Store in NPC memories that player got shears sharpened
-      const { npcManager: nm } = await import('./npcManager');
       // Store on Gaffer's memory that this player got shears sharpened
-      nm.addMemory(
+      npcManager.addMemory(
         3, // Gaffer's ID
         'player',
         event.actor.id,
