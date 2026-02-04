@@ -235,6 +235,14 @@ function applyMigrations(database: Database.Database): void {
     database.exec(`UPDATE players SET last_condition_update = datetime('now') WHERE last_condition_update IS NULL;`);
   }
 
+  // Check if last_condition_update column exists (partial migration fix)
+  const hasLastConditionUpdate = playerColumns.some(col => col.name === 'last_condition_update');
+  if (!hasLastConditionUpdate && hasCleanlinessCol) {
+    console.log('Applying migration: adding last_condition_update column');
+    database.exec(`ALTER TABLE players ADD COLUMN last_condition_update DATETIME;`);
+    database.exec(`UPDATE players SET last_condition_update = datetime('now') WHERE last_condition_update IS NULL;`);
+  }
+
   // Check if player_equipment table exists
   const tables = database.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='player_equipment'").get();
   if (!tables) {

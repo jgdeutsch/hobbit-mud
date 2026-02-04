@@ -145,8 +145,14 @@ The Shire awaits your adventure!
       ctx.player.id
     );
 
-    // Clean up
-    setTimeout(() => ws.close(), 100);
+    // Clean up - use end() for telnet sockets
+    setTimeout(() => {
+      if (typeof (ws as any).end === 'function') {
+        (ws as any).end();
+      } else if (typeof ws.close === 'function') {
+        ws.close();
+      }
+    }, 100);
     return '';
   },
 };
