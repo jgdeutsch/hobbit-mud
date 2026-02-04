@@ -43,6 +43,31 @@ class NpcReactionManager {
   // Track pending quest offers (NPC offered quest, waiting for player to accept)
   private pendingQuestOffers: Map<string, PendingQuestOffer> = new Map(); // key: `${roomId}-${playerId}`
   private questOfferTimeout = 60000; // 60 seconds to accept a quest offer
+
+  // NPC services - what services each NPC can provide
+  private npcServices: Record<number, {
+    service: string;
+    keywords: string[];
+    itemRequired?: number; // item template ID needed
+    cost?: number; // gold cost
+    responseSuccess: string;
+    responseMissingItem: string;
+    responseCantAfford?: string;
+  }[]> = {
+    // Ted Sandyman can sharpen tools
+    7: [
+      {
+        service: 'sharpen',
+        keywords: ['sharpen', 'sharpening', 'grind', 'whet', 'hone'],
+        itemRequired: 16, // pruning shears
+        cost: 2,
+        responseSuccess: '*takes the shears and holds them to the grindstone, sparks flying* "There you are. Sharp as a razor now. That\'ll be 2 gold."',
+        responseMissingItem: '"Sharpen what? You\'ll need to show me what you want sharpened. Got any tools on you?"',
+        responseCantAfford: '"Can\'t work for free, can I? Come back when you\'ve got 2 gold coins."',
+      },
+    ],
+  };
+
   // Common greeting words that should prompt NPC responses
   private greetingPatterns = [
     'hello', 'hi', 'hey', 'greetings', 'good morning', 'good afternoon',
@@ -459,6 +484,14 @@ class NpcReactionManager {
         }
       }
 
+      // Check if player is requesting a service from this NPC
+      if (event.actor.type === 'player') {
+        const serviceResult = await this.handleServiceRequest(npc, event);
+        if (serviceResult.handled) {
+          return serviceResult.responded;
+        }
+      }
+
       // Check if player is asking about work/quests and NPC has a desire
       const desire = npcManager.getCurrentDesire(npc.id);
       const isAskingAboutWork = geminiService.isAskingAboutWork(event.content);
@@ -677,6 +710,101 @@ class NpcReactionManager {
 
   private delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Handle service requests (like sharpening tools)
+   * Returns { handled: true, responded: true/false } if this was a service request
+   * Returns { handled: false } if not a service request
+   */
+  private async handleServiceRequest(
+    npc: NpcTemplate,
+    event: WitnessedEvent
+  ): Promise<{ handled: boolean; responded: boolean }> {
+    const services = this.npcServices[npc.id];
+    if (!services || services.length === 0) {
+      return { handled: false, responded: false };
+    }
+
+    const contentLower = event.content.toLowerCase();
+
+    // Check if any service keywords match
+    for (const service of services) {
+      const matchesService = service.keywords.some(kw => contentLower.includes(kw));
+      if (!matchesService) continue;
+
+      // This is a service request!
+      gameLog.log('NPC', 'SERVICE', `${npc.name} processing ${service.service} request from ${event.actor.name}`);
+
+      // Check if player has the required item
+      if (service.itemRequired) {
+        const { playerManager } = await import('./playerManager');
+        const itemTemplate = worldManager.getItemTemplate(service.itemRequired);
+        if (!itemTemplate) {
+          return { handled: false, responded: false };
+        }
+        const hasItem = playerManager.findInInventory(event.actor.id, itemTemplate.name);
+
+        if (!hasItem) {
+          connectionManager.sendToRoom(event.roomId, {
+            type: 'output',
+            content: `\n${npc.name} says: "${service.responseMissingItem}"\n`,
+          });
+          this.recordNpcSpokeToPlayer(event.roomId, npc.id, npc.name, event.actor.id, service.responseMissingItem);
+          return { handled: true, responded: true };
+        }
+
+        // Check if player can afford
+        if (service.cost) {
+          const player = playerManager.getPlayer(event.actor.id);
+          if (!player || player.gold < service.cost) {
+            connectionManager.sendToRoom(event.roomId, {
+              type: 'output',
+              content: `\n${npc.name} says: "${service.responseCantAfford || 'You can\'t afford that.'}"\n`,
+            });
+            this.recordNpcSpokeToPlayer(event.roomId, npc.id, npc.name, event.actor.id, service.responseCantAfford || "Can't afford");
+            return { handled: true, responded: true };
+          }
+
+          // Charge the player
+          playerManager.updateStats(event.actor.id, { gold: player.gold - service.cost });
+        }
+      }
+
+      // Success! Provide the service
+      connectionManager.sendToRoom(event.roomId, {
+        type: 'output',
+        content: `\n${npc.name} ${service.responseSuccess}\n`,
+      });
+
+      // Mark quest as completable - the shears are now "sharpened"
+      // For now, we'll add a memory that the shears were sharpened
+      npcManager.addMemory(
+        npc.id,
+        'player',
+        event.actor.id,
+        `Sharpened their ${service.service} for them`,
+        5
+      );
+
+      // Add a "sharpened" flag to the player somehow
+      // For the Gaffer quest, we need to track that shears were sharpened
+      // Store in NPC memories that player got shears sharpened
+      const { npcManager: nm } = await import('./npcManager');
+      // Store on Gaffer's memory that this player got shears sharpened
+      nm.addMemory(
+        3, // Gaffer's ID
+        'player',
+        event.actor.id,
+        'Got the shears sharpened at the mill',
+        8
+      );
+
+      this.recordNpcSpokeToPlayer(event.roomId, npc.id, npc.name, event.actor.id, service.responseSuccess);
+      return { handled: true, responded: true };
+    }
+
+    return { handled: false, responded: false };
   }
 
   /**

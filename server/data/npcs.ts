@@ -366,8 +366,8 @@ export const INITIAL_DESIRES: Partial<NpcDesire>[] = [
   {
     npcTemplateId: 7, // Ted Sandyman
     desireType: 'action',
-    desireContent: 'More customers at the mill',
-    desireReason: 'Business has been slow',
+    desireContent: 'Make money from sharpening services',
+    desireReason: 'Has a grindstone and charges for tool sharpening',
     priority: 5,
   },
   {
