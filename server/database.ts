@@ -222,13 +222,17 @@ function applyMigrations(database: Database.Database): void {
 
   if (!hasCleanlinessCol) {
     console.log('Applying migration: adding condition columns to players table');
+    // SQLite doesn't allow non-constant defaults in ALTER TABLE, so we add without default
+    // and then update existing rows
     database.exec(`
       ALTER TABLE players ADD COLUMN cleanliness INTEGER DEFAULT 100;
       ALTER TABLE players ADD COLUMN fatigue INTEGER DEFAULT 100;
       ALTER TABLE players ADD COLUMN bloodiness INTEGER DEFAULT 0;
       ALTER TABLE players ADD COLUMN wounds INTEGER DEFAULT 0;
-      ALTER TABLE players ADD COLUMN last_condition_update DATETIME DEFAULT CURRENT_TIMESTAMP;
+      ALTER TABLE players ADD COLUMN last_condition_update DATETIME;
     `);
+    // Update existing rows with current timestamp
+    database.exec(`UPDATE players SET last_condition_update = datetime('now') WHERE last_condition_update IS NULL;`);
   }
 
   // Check if player_equipment table exists
