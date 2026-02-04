@@ -3,6 +3,8 @@ import { NpcTemplate, NpcState, NpcFeeling, NpcMemory, Player } from '../../shar
 import { NPC_TEMPLATES, INITIAL_DESIRES, getNpcTemplate, getNpcByKeyword } from '../data/npcs';
 import geminiService from '../services/geminiService';
 import { gameLog } from '../services/logger';
+import { equipmentManager } from './equipmentManager';
+import { conditionManager } from './conditionManager';
 
 class NpcManager {
   // Initialize NPCs at server start
@@ -320,6 +322,12 @@ class NpcManager {
       .filter(n => n.template.id !== npc.id)
       .map(n => n.template.name);
 
+    // Get player appearance context
+    const equipmentQuality = equipmentManager.getEquipmentQualityDescription(player.id);
+    const visibleCondition = conditionManager.getVisibleConditionDescription(player.id);
+    const charismaBonus = equipmentManager.getCharismaBonus(player.id);
+    const npcReaction = conditionManager.getNpcReactionContext(player.id);
+
     const context = {
       mood: state?.mood || 'neutral',
       currentDesire: desire?.desireContent,
@@ -334,6 +342,17 @@ class NpcManager {
         : undefined,
       recentMemories: memories.map(m => m.memoryContent),
       otherNpcsPresent: otherNpcs.length > 0 ? otherNpcs : undefined,
+      playerAppearance: {
+        equipmentQuality,
+        visibleCondition,
+        charismaBonus,
+        npcReaction: {
+          fear: npcReaction.fear,
+          concern: npcReaction.concern,
+          disgust: npcReaction.disgust,
+          respect: npcReaction.respect + Math.floor(charismaBonus / 2), // Equipment affects respect
+        },
+      },
     };
 
     // Update last interaction time

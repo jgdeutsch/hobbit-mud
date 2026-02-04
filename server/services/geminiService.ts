@@ -25,6 +25,18 @@ export interface NpcContext {
   recentMemories?: string[];
   otherNpcsPresent?: string[];
   timeOfDay?: string;
+  // Player appearance context
+  playerAppearance?: {
+    equipmentQuality: string;      // e.g., "wearing fine, respectable clothing"
+    visibleCondition: string;      // e.g., "dirty, bloody"
+    charismaBonus: number;         // total from equipment
+    npcReaction: {
+      fear: number;
+      concern: number;
+      disgust: number;
+      respect: number;
+    };
+  };
 }
 
 /**
@@ -53,10 +65,19 @@ ${context.feelingsTowardPlayer ? `- Trust toward ${player.name}: ${context.feeli
 - Notes: ${context.feelingsTowardPlayer.notes || 'None'}` : ''}
 ${context.recentMemories?.length ? `- Recent memories: ${context.recentMemories.join('; ')}` : ''}
 ${context.otherNpcsPresent?.length ? `- Others present: ${context.otherNpcsPresent.join(', ')}` : ''}
+${context.playerAppearance ? `
+PLAYER APPEARANCE:
+- ${player.name} is ${context.playerAppearance.equipmentQuality}
+${context.playerAppearance.visibleCondition ? `- They appear: ${context.playerAppearance.visibleCondition}` : ''}
+${context.playerAppearance.npcReaction.fear > 20 ? `- You feel somewhat AFRAID of them (they look dangerous)` : ''}
+${context.playerAppearance.npcReaction.concern > 20 ? `- You feel CONCERNED for them (they seem hurt or unwell)` : ''}
+${context.playerAppearance.npcReaction.disgust > 20 ? `- You find their appearance UNPLEASANT (dirty, unkempt)` : ''}
+${context.playerAppearance.npcReaction.respect > 10 ? `- Their fine attire commands RESPECT` : context.playerAppearance.npcReaction.respect < -10 ? `- Their shabby appearance makes you think LESS of them` : ''}` : ''}
 
 The player ${player.name} says: "${playerMessage}"
 
-Respond as ${npc.name} would. Keep your response SHORT (1-3 sentences) and in character. Include your character's speech mannerisms. If relevant, mention your current desire or feelings. If you don't know something, stay in character about it.`;
+Respond as ${npc.name} would. Keep your response SHORT (1-3 sentences) and in character. Include your character's speech mannerisms. If relevant, mention your current desire or feelings. If you don't know something, stay in character about it.
+IMPORTANT: React to the player's appearance! If they look wealthy, be more deferential. If they look poor or dirty, be more dismissive. If they're bloody or wounded, show concern or fear.`;
 
   try {
     const result = await model.generateContent(prompt);

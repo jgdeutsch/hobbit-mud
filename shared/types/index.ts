@@ -75,6 +75,20 @@ export interface NpcMemory {
   createdAt: Date;
 }
 
+// Equipment slot types (KCD2-style)
+export type EquipmentSlot =
+  | 'head'      // hats, hoods, helmets
+  | 'neck'      // necklaces, scarves
+  | 'body'      // shirts, tunics
+  | 'torso'     // waistcoats, armor
+  | 'cloak'     // cloaks, capes
+  | 'hands'     // gloves, gauntlets
+  | 'legs'      // trousers, breeches
+  | 'feet'      // boots, shoes (hobbits rarely wear these!)
+  | 'mainHand'  // weapons, walking sticks
+  | 'offHand'   // shields, lanterns
+  | 'ring';     // rings (like that one ring...)
+
 // Item types
 export interface ItemTemplate {
   id: number;
@@ -86,12 +100,25 @@ export interface ItemTemplate {
   weight: number;
   value: number;
   effects?: ItemEffect[];
+  // Equipment-specific properties
+  equipSlot?: EquipmentSlot;
+  quality?: 'poor' | 'common' | 'fine' | 'exceptional' | 'masterwork';
+  armorValue?: number;
+  charismaBonus?: number; // affects NPC reactions
 }
 
 export interface ItemEffect {
   type: 'heal' | 'buff' | 'special';
   value: number;
   duration?: number;
+}
+
+// Player condition/status
+export interface PlayerCondition {
+  cleanliness: number;    // 0-100, degrades over time, low = dirty
+  fatigue: number;        // 0-100, degrades over time, low = exhausted
+  bloodiness: number;     // 0-100, from combat/wounds, 0 = clean
+  wounds: number;         // 0-100, from damage taken, 0 = healthy
 }
 
 // Player types
@@ -103,6 +130,26 @@ export interface Player {
   hp: number;
   maxHp: number;
   gold: number;
+  // Condition stats
+  cleanliness: number;
+  fatigue: number;
+  bloodiness: number;
+  wounds: number;
+}
+
+// Equipped items
+export interface PlayerEquipment {
+  head?: number;      // item_template_id
+  neck?: number;
+  body?: number;
+  torso?: number;
+  cloak?: number;
+  hands?: number;
+  legs?: number;
+  feet?: number;
+  mainHand?: number;
+  offHand?: number;
+  ring?: number;
 }
 
 export interface PlayerInventoryItem {

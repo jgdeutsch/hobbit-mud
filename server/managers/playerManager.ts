@@ -2,6 +2,8 @@ import { getDb } from '../database';
 import { Player, PlayerInventoryItem, ItemTemplate } from '../../shared/types';
 import { getItemTemplate } from '../data/items';
 import { createHash } from 'crypto';
+import { equipmentManager } from './equipmentManager';
+import { conditionManager } from './conditionManager';
 
 class PlayerManager {
   // Hash password (simple for now - use bcrypt in production)
@@ -45,16 +47,25 @@ class PlayerManager {
     try {
       const result = db
         .prepare(
-          `INSERT INTO players (account_id, name, current_room, hp, max_hp, gold)
-           VALUES (?, ?, 'bag_end_garden', 100, 100, 5)`
+          `INSERT INTO players (account_id, name, current_room, hp, max_hp, gold, cleanliness, fatigue, bloodiness, wounds)
+           VALUES (?, ?, 'bag_end_garden', 100, 100, 5, 100, 100, 0, 0)`
         )
         .run(accountId, name);
 
       const playerId = result.lastInsertRowid as number;
 
+      // Initialize equipment slots
+      equipmentManager.initializePlayer(playerId);
+
       // Give starting items
       this.addToInventory(playerId, 21, 1); // Handkerchief
       this.addToInventory(playerId, 11, 1); // Pipe
+      this.addToInventory(playerId, 28, 1); // Linen shirt
+      this.addToInventory(playerId, 37, 1); // Breeches
+
+      // Equip starting clothes
+      equipmentManager.equip(playerId, 28); // Linen shirt (body)
+      equipmentManager.equip(playerId, 37); // Breeches (legs)
 
       return this.getPlayer(playerId);
     } catch (error) {
@@ -78,6 +89,10 @@ class PlayerManager {
       hp: row.hp,
       maxHp: row.max_hp,
       gold: row.gold,
+      cleanliness: row.cleanliness ?? 100,
+      fatigue: row.fatigue ?? 100,
+      bloodiness: row.bloodiness ?? 0,
+      wounds: row.wounds ?? 0,
     };
   }
 
@@ -96,6 +111,10 @@ class PlayerManager {
       hp: row.hp,
       maxHp: row.max_hp,
       gold: row.gold,
+      cleanliness: row.cleanliness ?? 100,
+      fatigue: row.fatigue ?? 100,
+      bloodiness: row.bloodiness ?? 0,
+      wounds: row.wounds ?? 0,
     };
   }
 
@@ -113,6 +132,10 @@ class PlayerManager {
       hp: row.hp,
       maxHp: row.max_hp,
       gold: row.gold,
+      cleanliness: row.cleanliness ?? 100,
+      fatigue: row.fatigue ?? 100,
+      bloodiness: row.bloodiness ?? 0,
+      wounds: row.wounds ?? 0,
     }));
   }
 

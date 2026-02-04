@@ -46,6 +46,13 @@ export function initializeDatabase(): void {
       hp INTEGER DEFAULT 100,
       max_hp INTEGER DEFAULT 100,
       gold INTEGER DEFAULT 5,
+      -- Condition stats (0-100)
+      cleanliness INTEGER DEFAULT 100,
+      fatigue INTEGER DEFAULT 100,
+      bloodiness INTEGER DEFAULT 0,
+      wounds INTEGER DEFAULT 0,
+      -- Timestamps for degradation
+      last_condition_update DATETIME DEFAULT CURRENT_TIMESTAMP,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (account_id) REFERENCES accounts(id)
     );
@@ -55,6 +62,23 @@ export function initializeDatabase(): void {
       player_id INTEGER NOT NULL,
       item_template_id INTEGER NOT NULL,
       quantity INTEGER DEFAULT 1,
+      FOREIGN KEY (player_id) REFERENCES players(id)
+    );
+
+    -- Player equipped items (KCD2-style slots)
+    CREATE TABLE IF NOT EXISTS player_equipment (
+      player_id INTEGER PRIMARY KEY,
+      head INTEGER,
+      neck INTEGER,
+      body INTEGER,
+      torso INTEGER,
+      cloak INTEGER,
+      hands INTEGER,
+      legs INTEGER,
+      feet INTEGER,
+      main_hand INTEGER,
+      off_hand INTEGER,
+      ring INTEGER,
       FOREIGN KEY (player_id) REFERENCES players(id)
     );
 

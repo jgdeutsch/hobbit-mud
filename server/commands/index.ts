@@ -24,6 +24,10 @@ import {
   handleTime,
   handleScore,
   handleExamine,
+  handleEquip,
+  handleUnequip,
+  handleWash,
+  handleRest,
 } from './interaction';
 import {
   handleSay,
@@ -76,6 +80,20 @@ const COMMANDS: Record<string, CommandHandler> = {
   score: handleScore,
   stats: handleScore,
 
+  // Equipment
+  equip: handleEquip,
+  wear: handleEquip,
+  wield: handleEquip,
+  unequip: handleUnequip,
+  remove: handleUnequip,
+
+  // Condition
+  wash: handleWash,
+  bathe: handleWash,
+  clean: handleWash,
+  rest: handleRest,
+  sleep: handleRest,
+
   // Communication
   say: handleSay,
   "'": handleSay,
@@ -96,9 +114,11 @@ const COMMANDS: Record<string, CommandHandler> = {
 [Hobbit MUD Commands]
 
 Movement:    n, s, e, w (or north, south, east, west)
-Look:        look, look <target>, examine <target>
+Look:        look, look <target>, look self, examine <target>
 Items:       take <item>, drop <item>, give <item> to <target>
              inventory (or inv, i)
+Equipment:   equip <item>, unequip <slot>, wear <item>, remove <slot>
+Condition:   wash/bathe (near water), rest/sleep
 Talk:        talk <npc> [message], say <message>, shout <message>
              whisper <player> <message>, gossip <message>
 NPCs:        context <npc> - see NPC's feelings and desires
