@@ -1,8 +1,15 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { NpcTemplate, SocialDefinition, Player } from '../../shared/types';
+import * as dotenv from 'dotenv';
 
-const GEMINI_API_KEY = 'AIzaSyBxvpCeInudM1bs80tApSQ0XrqnKlaOXgk';
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
+// Load environment variables from .env file
+dotenv.config();
+
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+if (!GEMINI_API_KEY) {
+  console.error('WARNING: GEMINI_API_KEY not set in environment. AI features will not work.');
+}
+const genAI = new GoogleGenerativeAI(GEMINI_API_KEY || '');
 
 const model = genAI.getGenerativeModel({
   model: 'gemini-2.0-flash',
