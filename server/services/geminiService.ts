@@ -487,6 +487,47 @@ export function generateGuideAcceptResponse(npcName: string, destination: string
 }
 
 /**
+ * Generate a quest hook - brief offer asking if player wants to help
+ */
+export async function generateQuestHook(
+  npc: NpcTemplate,
+  playerName: string,
+  desire: { desireType: string; desireContent: string; desireReason?: string }
+): Promise<string> {
+  const prompt = `You are ${npc.name} in a Hobbit-themed MUD. ${playerName} just asked if you have any work.
+
+YOUR CHARACTER:
+- Name: ${npc.name}
+- Personality: ${npc.personality}
+- Speech style: ${npc.speechStyle}
+
+YOU WANT: ${desire.desireContent} (because: ${desire.desireReason || 'personal reasons'})
+
+Generate a BRIEF hook (under 20 words) that:
+1. Hints you have a task without fully explaining it
+2. Asks if they're interested/willing to help
+3. Stays in character with your speech style
+
+Examples of good hooks:
+- "Aye, I could use a hand with something. You interested?"
+- "Matter of fact, there is a small matter. Care to hear it?"
+- "Hmm, perhaps you could help me. Are you willing?"
+
+Respond with ONLY the dialogue, no quotes, no action, just what you say.`;
+
+  try {
+    const result = await model.generateContent(prompt);
+    const response = result.response.text().trim();
+    // Clean up any quotes the model might add
+    return response.replace(/^["']|["']$/g, '').trim();
+  } catch (error) {
+    console.error('Gemini quest hook error:', error);
+    // Fallback
+    return `Aye, ${playerName}, I could use some help. Interested?`;
+  }
+}
+
+/**
  * Generate a quest introduction - a series of messages explaining a quest
  * Returns multiple short messages covering: Relevance, Request, Reward, How
  */
@@ -575,6 +616,7 @@ export default {
   generateNpcReaction,
   detectGuideRequest,
   generateGuideAcceptResponse,
+  generateQuestHook,
   generateQuestIntroduction,
   isAskingAboutWork,
 };

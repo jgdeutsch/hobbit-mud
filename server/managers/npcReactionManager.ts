@@ -539,8 +539,8 @@ class NpcReactionManager {
     desire: { desireType: string; desireContent: string; desireReason?: string }
   ): Promise<boolean> {
     try {
-      // Generate a brief hook/offer based on NPC personality
-      const hookMessage = this.generateQuestHook(npc, event.actor.name);
+      // Generate a brief hook/offer using AI
+      const hookMessage = await geminiService.generateQuestHook(npc, event.actor.name, desire);
 
       connectionManager.sendToRoom(event.roomId, {
         type: 'output',
@@ -661,45 +661,6 @@ class NpcReactionManager {
 
   private delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
-  }
-
-  /**
-   * Generate a quest hook based on NPC personality
-   */
-  private generateQuestHook(npc: NpcTemplate, playerName: string): string {
-    // NPC-specific hooks based on their personality/speech style
-    const npcHooks: Record<string, string[]> = {
-      'Gaffer Gamgee': [
-        `Aye, ${playerName}, I could use a hand with something, if you take my meaning. Interested?`,
-        `Matter of fact, ${playerName}, there is something. You willing to help an old gardener?`,
-        `Well now, ${playerName}, I do have a small matter. Care to hear it?`,
-      ],
-      'Gandalf the Grey': [
-        `Perhaps... there is something you could help with, ${playerName}. Are you willing?`,
-        `Hmm, yes. I may have need of your assistance. Interested?`,
-        `A task awaits, if you have the courage. Do you?`,
-      ],
-      'Lobelia Sackville-Baggins': [
-        `Well! Since you're asking, there IS something. Though I doubt you'd be any help.`,
-        `Hmph. I suppose you could assist me with a matter. If you're capable.`,
-        `Oh, DO you want to help? Well, perhaps you can. Want to hear it?`,
-      ],
-    };
-
-    // Check if we have specific hooks for this NPC
-    const hooks = npcHooks[npc.name];
-    if (hooks) {
-      return hooks[Math.floor(Math.random() * hooks.length)];
-    }
-
-    // Default hooks for other NPCs
-    const defaultHooks = [
-      `Aye, ${playerName}, I could use some help. Interested?`,
-      `Matter of fact, there is something. Want to hear it?`,
-      `I do have a task that needs doing. Care to help?`,
-      `Yes, I could use a hand with something. You willing?`,
-    ];
-    return defaultHooks[Math.floor(Math.random() * defaultHooks.length)];
   }
 
   /**
