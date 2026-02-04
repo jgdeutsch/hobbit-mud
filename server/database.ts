@@ -208,7 +208,51 @@ export function initializeDatabase(): void {
     database.prepare('INSERT INTO game_time (id, hour, day, month, year) VALUES (1, 10, 1, 4, 2941)').run();
   }
 
+  // Apply migrations for existing databases
+  applyMigrations(database);
+
   console.log('Database initialized successfully');
+}
+
+// Apply migrations for new columns/tables
+function applyMigrations(database: Database.Database): void {
+  // Check if players table has cleanliness column
+  const playerColumns = database.prepare("PRAGMA table_info(players)").all() as { name: string }[];
+  const hasCleanlinessCol = playerColumns.some(col => col.name === 'cleanliness');
+
+  if (!hasCleanlinessCol) {
+    console.log('Applying migration: adding condition columns to players table');
+    database.exec(`
+      ALTER TABLE players ADD COLUMN cleanliness INTEGER DEFAULT 100;
+      ALTER TABLE players ADD COLUMN fatigue INTEGER DEFAULT 100;
+      ALTER TABLE players ADD COLUMN bloodiness INTEGER DEFAULT 0;
+      ALTER TABLE players ADD COLUMN wounds INTEGER DEFAULT 0;
+      ALTER TABLE players ADD COLUMN last_condition_update DATETIME DEFAULT CURRENT_TIMESTAMP;
+    `);
+  }
+
+  // Check if player_equipment table exists
+  const tables = database.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='player_equipment'").get();
+  if (!tables) {
+    console.log('Applying migration: creating player_equipment table');
+    database.exec(`
+      CREATE TABLE IF NOT EXISTS player_equipment (
+        player_id INTEGER PRIMARY KEY,
+        head INTEGER,
+        neck INTEGER,
+        body INTEGER,
+        torso INTEGER,
+        cloak INTEGER,
+        hands INTEGER,
+        legs INTEGER,
+        feet INTEGER,
+        main_hand INTEGER,
+        off_hand INTEGER,
+        ring INTEGER,
+        FOREIGN KEY (player_id) REFERENCES players(id)
+      );
+    `);
+  }
 }
 
 // Run initialization if this file is executed directly
