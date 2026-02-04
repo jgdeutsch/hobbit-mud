@@ -2,6 +2,7 @@ import { getDb } from '../database';
 import { NpcTemplate, NpcState, NpcFeeling, NpcMemory, Player } from '../../shared/types';
 import { NPC_TEMPLATES, INITIAL_DESIRES, getNpcTemplate, getNpcByKeyword } from '../data/npcs';
 import geminiService from '../services/geminiService';
+import { gameLog } from '../services/logger';
 
 class NpcManager {
   // Initialize NPCs at server start
@@ -217,9 +218,11 @@ class NpcManager {
     npcTemplateId: number,
     targetType: 'player' | 'npc',
     targetId: number,
-    adjustments: { trust?: number; affection?: number; socialCapital?: number }
+    adjustments: { trust?: number; affection?: number; socialCapital?: number },
+    reason?: string
   ): void {
     const current = this.getFeeling(npcTemplateId, targetType, targetId);
+    const npc = this.getNpcTemplate(npcTemplateId);
 
     const newValues = {
       trust: (current?.trust ?? 50) + (adjustments.trust ?? 0),
@@ -228,6 +231,17 @@ class NpcManager {
     };
 
     this.updateFeeling(npcTemplateId, targetType, targetId, newValues);
+
+    // Log feeling change
+    if (npc && (adjustments.trust || adjustments.affection)) {
+      gameLog.feelingUpdated(
+        npc.name,
+        targetType === 'player' ? `player#${targetId}` : `npc#${targetId}`,
+        newValues.trust,
+        newValues.affection,
+        reason || 'interaction'
+      );
+    }
   }
 
   // Add a memory
@@ -239,11 +253,17 @@ class NpcManager {
     importance: number = 5
   ): void {
     const db = getDb();
+    const npc = this.getNpcTemplate(npcTemplateId);
 
     db.prepare(
       `INSERT INTO npc_memories (npc_template_id, about_type, about_id, memory_content, importance)
        VALUES (?, ?, ?, ?, ?)`
     ).run(npcTemplateId, aboutType, aboutId, content, importance);
+
+    // Log memory
+    if (npc) {
+      gameLog.memoryAdded(npc.name, aboutType === 'player' ? `player#${aboutId}` : `npc#${aboutId}`, content);
+    }
 
     // Keep only last 10 memories per NPC-target pair
     db.prepare(
@@ -329,9 +349,17 @@ class NpcManager {
     this.addMemory(npc.id, 'player', player.id, memorySummary, 5);
 
     // Small positive adjustment for social interaction
-    this.adjustFeeling(npc.id, 'player', player.id, { affection: 1 });
+    this.adjustFeeling(npc.id, 'player', player.id, { affection: 1 }, 'talked');
 
-    return geminiService.generateNpcDialogue(npc, player, playerMessage, context);
+    // Log the dialogue request
+    gameLog.npcDialogue(npc.name, player.name, playerMessage, 'generating...');
+
+    const response = await geminiService.generateNpcDialogue(npc, player, playerMessage, context);
+
+    // Log the response
+    gameLog.npcDialogueResponse(npc.name, response);
+
+    return response;
   }
 
   // Get current active desire

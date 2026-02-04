@@ -3,6 +3,7 @@ import { CommandContext, DIRECTIONS } from '../../shared/types';
 import { worldManager } from '../managers/worldManager';
 import { connectionManager } from '../managers/connectionManager';
 import { socialManager } from '../managers/socialManager';
+import { gameLog } from '../services/logger';
 
 // Import command handlers
 import {
@@ -171,6 +172,9 @@ export async function processCommand(ws: WebSocket, input: string): Promise<void
     rawInput: input,
   };
 
+  // Log the command
+  gameLog.playerCommand(player.name, input, room.id);
+
   // Check registered commands first
   const handler = COMMANDS[cmd];
   if (handler) {
@@ -181,7 +185,7 @@ export async function processCommand(ws: WebSocket, input: string): Promise<void
       }
       return;
     } catch (error) {
-      console.error('Command error:', error);
+      gameLog.error('COMMAND', error);
       connectionManager.send(ws, {
         type: 'error',
         content: 'Something went wrong processing that command.',

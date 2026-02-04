@@ -6,6 +6,7 @@ import { worldManager } from './managers/worldManager';
 import { npcManager } from './managers/npcManager';
 import { processCommand, generateRoomOutput } from './commands';
 import { startGameLoop, stopGameLoop } from './gameLoop';
+import { gameLog } from './services/logger';
 
 const TELNET_PORT = parseInt(process.env.TELNET_PORT || '4000', 10);
 
@@ -111,6 +112,7 @@ Enter your choice: `;
   socket.on('close', () => {
     const player = connectionManager.getPlayer(socket as any);
     if (player) {
+      gameLog.playerDisconnect(player.name);
       connectionManager.sendToRoom(
         player.currentRoom,
         { type: 'output', content: `\n${player.name} has left the Shire.\n` },
@@ -120,7 +122,6 @@ Enter your choice: `;
 
     connectionManager.removeConnection(socket as any);
     telnetConnections.delete(socket);
-    console.log('Telnet connection closed');
   });
 
   socket.on('error', (error) => {
@@ -268,6 +269,9 @@ function enterGame(socket: net.Socket, playerId: number, tc: TelnetConnection): 
   connectionManager.setPlayer(socket as any, player);
   tc.state = 'playing';
 
+  // Log player connection
+  gameLog.playerConnect(player.name, player.currentRoom);
+
   // Send welcome message
   socket.write(`\n\x1b[32mWelcome to the Shire, ${player.name}!\x1b[0m\n`);
 
@@ -297,6 +301,7 @@ function sendToTelnet(socket: net.Socket, content: string): void {
 // Start telnet server
 telnetServer.listen(TELNET_PORT, () => {
   console.log(`Telnet server listening on port ${TELNET_PORT}`);
+  gameLog.gameStarted(TELNET_PORT);
 });
 
 // Graceful shutdown
