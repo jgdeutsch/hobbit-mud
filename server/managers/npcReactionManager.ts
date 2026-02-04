@@ -720,6 +720,12 @@ class NpcReactionManager {
     const desire = npcManager.getCurrentDesire(npc.id);
     const contentLower = event.content.toLowerCase();
 
+    // Check if player is asking about a location (where questions)
+    const isAskingWhere = contentLower.includes('where') ||
+                          contentLower.includes('how do i get') ||
+                          contentLower.includes('how to find') ||
+                          contentLower.includes('directions');
+
     if (desire) {
       parts.push(`You want: ${desire.desireContent} (reason: ${desire.desireReason || 'personal reasons'})`);
 
@@ -735,6 +741,45 @@ class NpcReactionManager {
           parts.push(`If they ask about ${desire.desireContent}, tell them you need it and would appreciate their help getting it.`);
           parts.push(`If they ask if they can take it or have it, say YES - you want them to bring you a new/better one.`);
           parts.push(`Be clear and direct about what you want, not evasive.`);
+        }
+      }
+
+      // If player is asking WHERE something is, and we recently gave a quest
+      if (isAskingWhere && desire.desireType === 'item') {
+        // Check if asking about the shed, location, etc.
+        const itemTemplate = this.findItemTemplateFromDesire(desire.desireContent);
+        if (itemTemplate) {
+          const npcRoom = state.currentRoom || 'bag_end_garden';
+          const locationInfo = worldManager.getItemLocationDescription(itemTemplate.id, npcRoom, 'exact');
+
+          if (locationInfo) {
+            parts.push(`IMPORTANT: The player is asking for directions! You just asked them to find ${desire.desireContent}.`);
+            parts.push(`The item is at: ${locationInfo.location}`);
+            parts.push(`Directions: ${locationInfo.directions}`);
+            parts.push(`Be HELPFUL and give them clear directions. Don't be evasive or dismissive!`);
+          }
+        }
+      }
+    }
+
+    // Handle general "where is X" questions when we're in a conversation
+    if (isAskingWhere && isConversationContinuation && event.actor.type === 'player') {
+      // Check NPC's last message to see if it mentioned a location
+      const prevContext = this.getRecentConversationPartner(event.roomId, event.actor.id);
+      if (prevContext) {
+        const lastMsg = prevContext.lastMessage.toLowerCase();
+        // Common location phrases NPCs might have mentioned
+        const locationKeywords = ['shed', 'mill', 'dragon', 'village', 'kitchen', 'hall', 'garden'];
+        const mentionedLocation = locationKeywords.find(loc => lastMsg.includes(loc));
+
+        if (mentionedLocation) {
+          parts.push(`IMPORTANT: You just mentioned "${mentionedLocation}" and now the player is asking where it is.`);
+          parts.push(`Be HELPFUL! They're following up on directions YOU gave them.`);
+
+          // If it's the garden shed, it's right here in the garden
+          if (mentionedLocation === 'shed' && state.currentRoom === 'bag_end_garden') {
+            parts.push(`The shed is RIGHT HERE in this garden - just look around! Use "look shed" to see it.`);
+          }
         }
       }
     }
