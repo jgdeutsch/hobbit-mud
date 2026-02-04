@@ -236,6 +236,110 @@ class WorldManager {
         item.name.toLowerCase().includes(lower)
     );
   }
+
+  // Find rooms that contain a specific item (from room templates, not runtime state)
+  findRoomsWithItem(itemTemplateId: number): { roomId: string; roomName: string }[] {
+    const results: { roomId: string; roomName: string }[] = [];
+
+    for (const room of Object.values(ROOMS)) {
+      // Check room's items array
+      if (room.items && room.items.includes(itemTemplateId)) {
+        results.push({ roomId: room.id, roomName: room.name });
+      }
+      // Also check room features that have itemTemplateId (takeable features)
+      if (room.features) {
+        for (const feature of room.features) {
+          if (feature.takeable && feature.itemTemplateId === itemTemplateId) {
+            // Don't double-add if already in items array
+            if (!results.find(r => r.roomId === room.id)) {
+              results.push({ roomId: room.id, roomName: room.name });
+            }
+          }
+        }
+      }
+    }
+
+    return results;
+  }
+
+  // Get item location info with directions from a given room
+  getItemLocationInfo(
+    itemTemplateId: number,
+    fromRoomId: string
+  ): { roomId: string; roomName: string; directions: string } | null {
+    const rooms = this.findRoomsWithItem(itemTemplateId);
+    if (rooms.length === 0) return null;
+
+    // Find the closest room
+    let closestRoom: { roomId: string; roomName: string; directions: string } | null = null;
+    let shortestPath = Infinity;
+
+    for (const room of rooms) {
+      const path = this.findPath(fromRoomId, room.roomId);
+      if (path && path.length < shortestPath) {
+        shortestPath = path.length;
+        closestRoom = {
+          roomId: room.roomId,
+          roomName: room.roomName,
+          directions: this.pathToDirections(path),
+        };
+      }
+    }
+
+    return closestRoom;
+  }
+
+  // Get item location description suitable for NPC dialogue
+  getItemLocationDescription(
+    itemTemplateId: number,
+    fromRoomId: string,
+    npcKnowledgeLevel: 'exact' | 'general' | 'vague' = 'exact'
+  ): { location: string; directions: string } | null {
+    const locationInfo = this.getItemLocationInfo(itemTemplateId, fromRoomId);
+    if (!locationInfo) return null;
+
+    // Get more context about the location
+    const targetRoom = this.getRoom(locationInfo.roomId);
+    if (!targetRoom) return null;
+
+    // Check if the item is in a feature (like a shed)
+    let featureContext = '';
+    if (targetRoom.features) {
+      for (const feature of targetRoom.features) {
+        if (feature.takeable && feature.itemTemplateId === itemTemplateId) {
+          featureContext = ` (in the ${feature.name})`;
+          break;
+        }
+      }
+    }
+
+    switch (npcKnowledgeLevel) {
+      case 'exact':
+        return {
+          location: `${targetRoom.name}${featureContext}`,
+          directions: locationInfo.directions,
+        };
+      case 'general':
+        // Give area but not exact spot
+        return {
+          location: targetRoom.name,
+          directions: locationInfo.directions,
+        };
+      case 'vague':
+        // Just direction, no specific location
+        const path = this.findPath(fromRoomId, locationInfo.roomId);
+        if (path && path.length > 0) {
+          return {
+            location: `somewhere to the ${path[0]}`,
+            directions: `Try heading ${path[0]}`,
+          };
+        }
+        return {
+          location: 'somewhere nearby',
+          directions: 'Look around the area',
+        };
+    }
+  }
 }
 
 export const worldManager = new WorldManager();

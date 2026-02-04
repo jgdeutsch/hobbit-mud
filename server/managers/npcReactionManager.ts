@@ -1,8 +1,10 @@
 import { NpcTemplate, Player } from '../../shared/types';
 import { npcManager } from './npcManager';
 import { connectionManager } from './connectionManager';
+import { worldManager } from './worldManager';
 import geminiService from '../services/geminiService';
 import { gameLog } from '../services/logger';
+import { ITEM_TEMPLATES } from '../data/items';
 
 export interface WitnessedEvent {
   type: 'say' | 'emote' | 'social' | 'action' | 'arrival' | 'departure';
@@ -587,10 +589,23 @@ class NpcReactionManager {
       let directions: string | undefined;
 
       if (desire.desireType === 'item') {
-        const desireLower = desire.desireContent.toLowerCase();
-        if (desireLower.includes('shears') || desireLower.includes('pruning')) {
-          itemLocation = 'the garden shed here at Bag End';
-          directions = 'Look around the garden - there should be a shed with tools';
+        // Try to find the item using pathfinding
+        const itemTemplate = this.findItemTemplateFromDesire(desire.desireContent);
+        if (itemTemplate) {
+          // Get NPC's current room
+          const npcState = npcManager.getNpcState(npc.id);
+          const npcRoom = npcState?.currentRoom || 'bag_end_garden';
+
+          const locationInfo = worldManager.getItemLocationDescription(
+            itemTemplate.id,
+            npcRoom,
+            'exact' // NPCs in the Shire know their local area well
+          );
+
+          if (locationInfo) {
+            itemLocation = locationInfo.location;
+            directions = locationInfo.directions;
+          }
         }
       }
 
@@ -661,6 +676,30 @@ class NpcReactionManager {
 
   private delay(ms: number): Promise<void> {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Find an item template based on desire content
+   * Matches keywords in the desire against item templates
+   */
+  private findItemTemplateFromDesire(desireContent: string): typeof ITEM_TEMPLATES[0] | null {
+    const lower = desireContent.toLowerCase();
+
+    // Try to find a matching item template
+    for (const item of ITEM_TEMPLATES) {
+      // Check if any of the item's keywords appear in the desire
+      for (const keyword of item.keywords) {
+        if (lower.includes(keyword.toLowerCase())) {
+          return item;
+        }
+      }
+      // Also check the item name
+      if (lower.includes(item.name.toLowerCase())) {
+        return item;
+      }
+    }
+
+    return null;
   }
 
   /**
