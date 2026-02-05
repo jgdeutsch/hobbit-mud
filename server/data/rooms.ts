@@ -628,10 +628,11 @@ export const ROOMS: Record<string, Room> = {
   },
 };
 
-// Add overhill exit to hobbiton_hill
-ROOMS.hobbiton_hill.exits.north = 'overhill';
+// Add overhill as a separate exit (northwest) so it doesn't break the path to Bag End
+// The north exit should remain as bagshot_row for the main path to Bag End
+ROOMS.hobbiton_hill.exits.northwest = 'overhill';
 // Fix: add exit back from overhill
-ROOMS.overhill.exits.south = 'hobbiton_hill';
+ROOMS.overhill.exits.southeast = 'hobbiton_hill';
 
 export function getRoom(roomId: string): Room | undefined {
   return ROOMS[roomId];

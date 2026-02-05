@@ -177,6 +177,77 @@ class WorldManager {
     return this.pathToDirections(path);
   }
 
+  // Get detailed step-by-step navigation with room names for each step
+  // This is useful for NPCs that need to give very detailed directions
+  getDetailedPath(
+    fromRoomId: string,
+    toRoomId: string
+  ): { direction: string; fromRoom: string; toRoom: string; toRoomId: string }[] | null {
+    if (fromRoomId === toRoomId) return [];
+
+    const path = this.findPath(fromRoomId, toRoomId);
+    if (!path) return null;
+
+    const steps: { direction: string; fromRoom: string; toRoom: string; toRoomId: string }[] = [];
+    let currentRoomId = fromRoomId;
+
+    for (const direction of path) {
+      const currentRoom = this.getRoom(currentRoomId);
+      if (!currentRoom) break;
+
+      const nextRoomId = currentRoom.exits[direction];
+      if (!nextRoomId) break;
+
+      const nextRoom = this.getRoom(nextRoomId);
+      if (!nextRoom) break;
+
+      steps.push({
+        direction,
+        fromRoom: currentRoom.name,
+        toRoom: nextRoom.name,
+        toRoomId: nextRoomId,
+      });
+
+      currentRoomId = nextRoomId;
+    }
+
+    return steps;
+  }
+
+  // Get navigation instructions formatted for NPC dialogue
+  // e.g., "From here, go north to The Hill, then west to Hobbiton Village, then south to the Green Dragon."
+  getDetailedDirections(fromRoomId: string, toRoomId: string): string | null {
+    const steps = this.getDetailedPath(fromRoomId, toRoomId);
+    if (!steps) return null;
+    if (steps.length === 0) return 'You are already there.';
+
+    if (steps.length === 1) {
+      return `Go ${steps[0].direction} to ${steps[0].toRoom}.`;
+    }
+
+    // Build natural-sounding directions
+    const parts = steps.map((step, i) => {
+      if (i === 0) {
+        return `go ${step.direction} to ${step.toRoom}`;
+      }
+      return `then ${step.direction} to ${step.toRoom}`;
+    });
+
+    // Capitalize first letter
+    const result = parts.join(', ');
+    return result.charAt(0).toUpperCase() + result.slice(1) + '.';
+  }
+
+  // Get a list of all steps as simple strings for easy iteration
+  // Returns: ["Go north to The Hill", "Go west to Hobbiton Village", ...]
+  getNavigationSteps(fromRoomId: string, toRoomId: string): string[] | null {
+    const steps = this.getDetailedPath(fromRoomId, toRoomId);
+    if (!steps) return null;
+    if (steps.length === 0) return ['You are already there.'];
+
+    return steps.map(step => `Go ${step.direction} to ${step.toRoom}`);
+  }
+
   // Spawn an item for a quest/desire
   spawnQuestItem(
     itemTemplateId: number,
