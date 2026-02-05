@@ -28,9 +28,22 @@ const model = genAI.getGenerativeModel({
 
 interface WorldContext {
   rooms: { id: string; name: string }[];
-  npcs: { id: number; name: string; location: string; services?: string }[];
-  items: { id: number; name: string; locations: string[] }[];
+  npcs: { id: number; name: string; location: string; role: string; services?: string }[];
+  items: { id: number; name: string; type: string; location?: string }[];
 }
+
+// NPC roles and services for quest generation
+const NPC_ROLES: Record<number, { role: string; services?: string }> = {
+  1: { role: 'wealthy hobbit, master of Bag End' },
+  2: { role: 'wizard, advisor' },
+  3: { role: 'gardener at Bag End', services: 'gardening knowledge' },
+  4: { role: 'nosy relative, troublemaker' },
+  5: { role: 'greedy relative' },
+  6: { role: 'farmer, owns mushroom fields' },
+  7: { role: 'miller', services: 'can sharpen tools and blades at the mill' },
+  8: { role: 'innkeeper at the Green Dragon', services: 'sells ale and food, knows gossip' },
+  9: { role: 'elderly retired hobbit, likes tea and stories' }, // Daddy Twofoot - NOT a merchant!
+};
 
 /**
  * Build world context for quest generation
@@ -42,20 +55,38 @@ export function buildWorldContext(): WorldContext {
     name: room.name,
   }));
 
-  // Get NPCs with their locations
-  const npcs = NPC_TEMPLATES.map(npc => ({
+  // Get NPCs with their locations and roles
+  const npcs = NPC_TEMPLATES.filter(npc => !npc.arrivalHour).map(npc => ({
     id: npc.id,
     name: npc.name,
     location: npc.homeRoom,
-    services: undefined as string | undefined, // Could extend with services
+    role: NPC_ROLES[npc.id]?.role || npc.personality,
+    services: NPC_ROLES[npc.id]?.services,
   }));
 
-  // Get items with their default locations
-  const items = ITEM_TEMPLATES.map(item => ({
-    id: item.id,
-    name: item.name,
-    locations: ['various'], // Items can be in multiple places
-  }));
+  // Get items with their types and default locations
+  const items = ITEM_TEMPLATES.map(item => {
+    // Find which room has this item
+    let location: string | undefined;
+    for (const [roomId, room] of Object.entries(ROOMS)) {
+      if (room.items?.includes(item.id)) {
+        location = roomId;
+        break;
+      }
+      // Also check features that are takeable
+      const feature = room.features?.find(f => f.itemTemplateId === item.id && f.takeable);
+      if (feature) {
+        location = roomId;
+        break;
+      }
+    }
+    return {
+      id: item.id,
+      name: item.name,
+      type: item.itemType || 'misc',
+      location,
+    };
+  });
 
   return { rooms, npcs, items };
 }
@@ -70,46 +101,55 @@ export async function generateQuestFromDesire(
 ): Promise<GeneratedQuestData | null> {
   const worldContext = buildWorldContext();
 
-  const prompt = `You are a quest designer for a Hobbit MUD set in The Shire at the beginning of "The Hobbit."
+  // Filter NPCs to show only relevant ones with services
+  const relevantNpcs = worldContext.npcs.filter(n => n.services || n.id === npc.id);
+
+  const prompt = `You are a quest designer for a Hobbit MUD set in The Shire.
 
 QUEST GIVER: ${npc.name}
-- Personality: ${npc.personality}
+- Role: ${NPC_ROLES[npc.id]?.role || npc.personality}
 - Speech style: ${npc.speechStyle}
-- Home: ${npc.homeRoom}
+- Location: ${npc.homeRoom}
 
 DESIRE: ${desire.desireContent}
 REASON: ${desire.desireReason || 'Personal reasons'}
 
 PLAYER: ${playerName}
 
-AVAILABLE WORLD:
-Rooms: ${JSON.stringify(worldContext.rooms.slice(0, 20))}
-NPCs: ${JSON.stringify(worldContext.npcs.slice(0, 15))}
-Items: ${JSON.stringify(worldContext.items.slice(0, 20))}
+IMPORTANT - NPCs WITH SERVICES (use these for quests):
+${relevantNpcs.map(n => `- ${n.name} (id:${n.id}) at ${n.location}: ${n.role}${n.services ? ` - SERVICES: ${n.services}` : ''}`).join('\n')}
 
-Design a quest with 2-4 steps using ONLY the above world data.
-Each step must use existing rooms, items, or NPCs from the lists provided.
-Make the quest feel organic to The Shire setting - cozy, pastoral, but with a sense of adventure.
+AVAILABLE ITEMS:
+${worldContext.items.filter(i => i.location).map(i => `- ${i.name} (id:${i.id}) at ${i.location}`).join('\n')}
 
-Step types available:
-- get_item: Player must pick up a specific item (target_id = item id as string)
-- visit_location: Player must go to a specific room (target_id = room id)
-- talk_to_npc: Player must speak with a specific NPC (target_id = npc id as string)
-- give_item: Player must give an item to an NPC (target_id = "item_id:npc_id")
-- use_service: Player must use an NPC's service (target_id = "npc_id:service_type")
+RULES:
+1. DO NOT start with "talk to quest giver" - the player is ALREADY talking to them
+2. ONLY use NPCs with services listed above for service-related steps
+3. If an item needs sharpening/repair, use Ted Sandyman (id:7) at the mill
+4. Make sure items actually exist at the locations you specify
+5. The final step should return something to the quest giver or complete the task
 
-Return ONLY valid JSON (no markdown, no explanation):
+Design a quest with 2-4 steps.
+
+Step types:
+- get_item: Pick up an item (targetId = item id as string)
+- visit_location: Go to a room (targetId = room id)
+- talk_to_npc: Speak with NPC (targetId = npc id as string)
+- give_item: Give item to NPC (targetId = "item_id:npc_id")
+- use_service: Use NPC service (targetId = "npc_id:service_type")
+
+Return ONLY valid JSON:
 {
-  "title": "Quest Title (short, evocative, Hobbit-themed)",
-  "description": "One sentence describing the quest",
+  "title": "Quest Title",
+  "description": "One sentence quest description",
   "steps": [
     {
-      "stepType": "get_item|visit_location|talk_to_npc|give_item|use_service",
-      "targetId": "the exact id from the world data",
-      "targetName": "human readable name",
-      "description": "What player sees as the objective",
-      "npcHint": "What NPCs say to guide player here (in character, using ${npc.speechStyle})",
-      "completionDialogue": "Message when this step completes (in character)"
+      "stepType": "step type",
+      "targetId": "exact id",
+      "targetName": "readable name",
+      "description": "Player objective",
+      "npcHint": "NPC hint in ${npc.speechStyle} style",
+      "completionDialogue": "Completion message"
     }
   ]
 }`;
@@ -151,6 +191,17 @@ export function createQuestFromGenerated(
   generated: GeneratedQuestData,
   desireId?: number
 ): number {
+  // Filter out any "talk to quest giver" steps at the beginning
+  // since the player is already talking to them when accepting the quest
+  let steps = generated.steps;
+  if (steps.length > 0 && steps[0].stepType === 'talk_to_npc') {
+    const firstTargetId = parseInt(steps[0].targetId, 10);
+    if (firstTargetId === npcId) {
+      // Skip this redundant step - player is already talking to the quest giver
+      steps = steps.slice(1);
+    }
+  }
+
   // Create the quest
   const questId = questManager.createQuest(
     playerId,
@@ -160,9 +211,9 @@ export function createQuestFromGenerated(
     desireId
   );
 
-  // Add all steps
-  for (let i = 0; i < generated.steps.length; i++) {
-    const step = generated.steps[i];
+  // Add all steps (renumber after potential filtering)
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i];
     questManager.addQuestStep(
       questId,
       i + 1, // step_order starts at 1
