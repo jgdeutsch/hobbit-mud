@@ -602,7 +602,7 @@ export const ROOMS: Record<string, Room> = {
     name: 'Overhill',
     description: `A small village north of Hobbiton, quieter and more rural. The hobbits here tend sheep on the gentle hills and grow the finest pipe-weed in the north Shire. From the hilltops you can see for miles - on clear days, the towers of distant lands are visible on the horizon. Or so travelers claim.`,
     exits: {
-      south: 'hobbiton_hill',
+      // Exit set dynamically below (southeast to hobbiton_hill)
     },
     features: [
       {
