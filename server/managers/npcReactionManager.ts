@@ -881,6 +881,44 @@ class NpcReactionManager {
   }
 
   /**
+   * Find if the player is asking about a specific NPC's location
+   * Returns location info with directions if an NPC is mentioned
+   */
+  private findMentionedNpcLocation(
+    query: string,
+    fromRoomId: string
+  ): { npcName: string; roomId: string; roomName: string; directions: string | null; isHere: boolean } | null {
+    // Try to find any NPC mentioned in the query
+    for (const npcTemplate of NPC_TEMPLATES) {
+      // Check if any of this NPC's keywords appear in the query
+      const mentioned = npcTemplate.keywords.some(keyword =>
+        query.includes(keyword.toLowerCase())
+      ) || query.includes(npcTemplate.name.toLowerCase());
+
+      if (mentioned) {
+        // Found a mentioned NPC - get their location
+        const locationInfo = npcManager.findNpcLocation(npcTemplate.keywords[0]);
+        if (locationInfo) {
+          const room = worldManager.getRoom(locationInfo.roomId);
+          const roomName = room?.name || locationInfo.roomId;
+          const isHere = locationInfo.roomId === fromRoomId;
+          const directions = isHere ? null : worldManager.getDirections(fromRoomId, locationInfo.roomId);
+
+          return {
+            npcName: npcTemplate.name,
+            roomId: locationInfo.roomId,
+            roomName,
+            directions,
+            isHere,
+          };
+        }
+      }
+    }
+
+    return null;
+  }
+
+  /**
    * Build context for reaction generation
    */
   private buildReactionContext(
@@ -1003,6 +1041,32 @@ class NpcReactionManager {
         if (directions) {
           parts.push(`The Mill is east of Hobbiton Village. Directions from here: ${directions}`);
         }
+      }
+    }
+
+    // Check if player is asking WHERE a specific NPC is located
+    // Patterns: "where is X", "where can I find X", "how do I find X", "where does X live"
+    const isAskingAboutPerson = isAskingWhere && (
+      contentLower.includes('find') ||
+      contentLower.includes('where is') ||
+      contentLower.includes('where does') ||
+      contentLower.includes('where can') ||
+      contentLower.includes('looking for')
+    );
+
+    if (isAskingAboutPerson) {
+      // Try to extract the NPC name from the question
+      // Look for NPC names/keywords in the message
+      const npcLocation = this.findMentionedNpcLocation(contentLower, state.currentRoom);
+      if (npcLocation) {
+        parts.push(`IMPORTANT: The player is asking where to find ${npcLocation.npcName}!`);
+        parts.push(`${npcLocation.npcName} is located at: ${npcLocation.roomName}`);
+        if (npcLocation.directions) {
+          parts.push(`Directions from here: ${npcLocation.directions}`);
+        } else if (npcLocation.isHere) {
+          parts.push(`${npcLocation.npcName} is RIGHT HERE in this location!`);
+        }
+        parts.push(`Be HELPFUL and give them clear directions. Use the exact directions provided.`);
       }
     }
 

@@ -59,6 +59,30 @@ class NpcManager {
     return getNpcByKeyword(keyword);
   }
 
+  // Get NPC's current location (room ID)
+  // Returns the NPC's current room from state, or their homeRoom as fallback
+  getNpcLocation(npcTemplateId: number): string | null {
+    const state = this.getNpcState(npcTemplateId);
+    if (state?.currentRoom) {
+      return state.currentRoom;
+    }
+    // Fallback to home room from template
+    const template = this.getNpcTemplate(npcTemplateId);
+    return template?.homeRoom || null;
+  }
+
+  // Find an NPC by keyword and return their location info
+  // Useful for "where is [NPC]" questions
+  findNpcLocation(keyword: string): { npc: NpcTemplate; roomId: string } | null {
+    const npc = this.findNpcByKeyword(keyword);
+    if (!npc) return null;
+
+    const roomId = this.getNpcLocation(npc.id);
+    if (!roomId) return null;
+
+    return { npc, roomId };
+  }
+
   // Get NPC state
   getNpcState(npcTemplateId: number): NpcState | null {
     const db = getDb();
