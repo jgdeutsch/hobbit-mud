@@ -883,13 +883,20 @@ class NpcReactionManager {
   /**
    * Find if the player is asking about a specific NPC's location
    * Returns location info with directions if an NPC is mentioned
+   * @param excludeNpcId - NPC to exclude from search (typically the NPC being spoken to)
    */
   private findMentionedNpcLocation(
     query: string,
-    fromRoomId: string
+    fromRoomId: string,
+    excludeNpcId?: number
   ): { npcName: string; roomId: string; roomName: string; directions: string | null; isHere: boolean } | null {
     // Try to find any NPC mentioned in the query
     for (const npcTemplate of NPC_TEMPLATES) {
+      // Skip the NPC we're talking to - we're looking for who they're asking ABOUT
+      if (excludeNpcId && npcTemplate.id === excludeNpcId) {
+        continue;
+      }
+
       // Check if any of this NPC's keywords appear in the query
       const mentioned = npcTemplate.keywords.some(keyword =>
         query.includes(keyword.toLowerCase())
@@ -1057,9 +1064,11 @@ class NpcReactionManager {
     if (isAskingAboutPerson) {
       // Try to extract the NPC name from the question
       // Look for NPC names/keywords in the message
-      const npcLocation = this.findMentionedNpcLocation(contentLower, state.currentRoom);
+      // Exclude the current NPC (npc.id) so we don't match "gaffer" when asking Gaffer about someone else
+      const npcLocation = this.findMentionedNpcLocation(contentLower, state.currentRoom, npc.id);
       gameLog.log('NPC', 'LOCATION-QUERY', `Player asking about NPC location`, {
         query: contentLower,
+        askingNpc: npc.name,
         foundNpc: npcLocation?.npcName || 'none',
         roomId: npcLocation?.roomId || 'none',
         directions: npcLocation?.directions || 'none',
