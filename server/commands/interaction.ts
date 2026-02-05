@@ -8,6 +8,7 @@ import { connectionManager } from '../managers/connectionManager';
 import { timeManager } from '../managers/timeManager';
 import { equipmentManager } from '../managers/equipmentManager';
 import { conditionManager } from '../managers/conditionManager';
+import { questManager } from '../managers/questManager';
 import { generateRoomOutput } from './movement';
 import geminiService from '../services/geminiService';
 import { WebSocket } from 'ws';
@@ -201,7 +202,17 @@ export async function handleTake(ws: WebSocket, ctx: CommandContext): Promise<st
         ctx.player.id
       );
 
-      return `You take ${item?.shortDesc || 'it'}.`;
+      let response = `You take ${item?.shortDesc || 'it'}.`;
+
+      // Check quest completion for item pickup
+      if (feature.itemTemplateId) {
+        const questResult = questManager.checkItemPickup(ctx.player.id, feature.itemTemplateId);
+        if (questResult.completed && questResult.message) {
+          response += `\n\n${questResult.message}`;
+        }
+      }
+
+      return response;
     }
   }
 
@@ -221,7 +232,15 @@ export async function handleTake(ws: WebSocket, ctx: CommandContext): Promise<st
       ctx.player.id
     );
 
-    return `You pick up ${roomItem.item.shortDesc}.`;
+    let response = `You pick up ${roomItem.item.shortDesc}.`;
+
+    // Check quest completion for item pickup
+    const questResult = questManager.checkItemPickup(ctx.player.id, roomItem.item.id);
+    if (questResult.completed && questResult.message) {
+      response += `\n\n${questResult.message}`;
+    }
+
+    return response;
   }
 
   return `You don't see '${itemName}' here.`;
@@ -307,7 +326,15 @@ export async function handleGive(ws: WebSocket, ctx: CommandContext): Promise<st
         ctx.player.id
       );
 
-      return result.response;
+      let response = result.response;
+
+      // Check quest completion for giving item to NPC
+      const questResult = questManager.checkItemGive(ctx.player.id, invItem.item.id, template.id);
+      if (questResult.completed && questResult.message) {
+        response += `\n\n${questResult.message}`;
+      }
+
+      return response;
     }
   }
 
@@ -447,7 +474,15 @@ export async function handleTalk(ws: WebSocket, ctx: CommandContext): Promise<st
         ctx.player.id
       );
 
-      return `You say to ${template.name}: "${message}"\n\n${template.name} says: "${response}"`;
+      let output = `You say to ${template.name}: "${message}"\n\n${template.name} says: "${response}"`;
+
+      // Check quest completion for talking to NPC
+      const questResult = questManager.checkNpcConversation(ctx.player.id, template.id);
+      if (questResult.completed && questResult.message) {
+        output += `\n\n${questResult.message}`;
+      }
+
+      return output;
     }
   }
 
@@ -875,4 +910,21 @@ Write from the player's perspective, as if they're sitting by a fire thinking ba
 
     return lines.join('\n');
   }
+}
+
+// Handle quest command - view quests
+export async function handleQuest(ws: WebSocket, ctx: CommandContext): Promise<string> {
+  const args = ctx.args;
+
+  // If a number is provided, show detailed view
+  if (args.length > 0) {
+    const questNum = parseInt(args[0], 10);
+    if (!isNaN(questNum)) {
+      return questManager.formatQuestDetail(ctx.player.id, questNum);
+    }
+    return "Usage: 'quest' to see all quests, 'quest <number>' for details.";
+  }
+
+  // Show quest list
+  return questManager.formatQuestList(ctx.player.id);
 }

@@ -178,6 +178,50 @@ export interface FollowRelationship {
   leaderId: number;
 }
 
+// Quest types
+export type QuestStatus = 'active' | 'completed' | 'abandoned';
+export type QuestStepStatus = 'pending' | 'current' | 'completed';
+export type QuestStepType = 'get_item' | 'visit_location' | 'talk_to_npc' | 'give_item' | 'use_service';
+
+export interface Quest {
+  id: number;
+  playerId: number;
+  questGiverNpcId: number;
+  title: string;
+  description: string | null;
+  status: QuestStatus;
+  acceptedAt: Date;
+  completedAt: Date | null;
+  desireId: number | null;
+}
+
+export interface QuestStep {
+  id: number;
+  questId: number;
+  stepOrder: number;
+  stepType: QuestStepType;
+  targetId: string | null;      // item_template_id, room_id, or npc_template_id
+  targetName: string;           // Human-readable name
+  description: string;          // What player sees as objective
+  npcHint: string;              // What NPCs say to guide player
+  completionDialogue: string | null;  // Message when step completes
+  status: QuestStepStatus;
+  completedAt: Date | null;
+}
+
+export interface GeneratedQuestData {
+  title: string;
+  description: string;
+  steps: {
+    stepType: QuestStepType;
+    targetId: string;
+    targetName: string;
+    description: string;
+    npcHint: string;
+    completionDialogue: string;
+  }[];
+}
+
 // Game time
 export interface GameTime {
   hour: number;

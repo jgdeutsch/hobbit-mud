@@ -1,9 +1,11 @@
-import { NpcTemplate, Player } from '../../shared/types';
+import { NpcTemplate, Player, NpcDesire } from '../../shared/types';
 import { npcManager } from './npcManager';
 import { connectionManager } from './connectionManager';
 import { worldManager } from './worldManager';
 import { playerManager } from './playerManager';
+import { questManager } from './questManager';
 import geminiService from '../services/geminiService';
+import questGenerator from '../services/questGenerator';
 import { gameLog } from '../services/logger';
 import { ITEM_TEMPLATES } from '../data/items';
 import { getNpcKnowledge, NPC_TEMPLATES } from '../data/npcs';
@@ -644,6 +646,7 @@ class NpcReactionManager {
         }
       }
 
+      // Generate the quest intro dialogue
       const intro = await geminiService.generateQuestIntroduction(
         npc,
         event.actor.name,
@@ -683,6 +686,37 @@ class NpcReactionManager {
         // Small delay between messages (but not after the last one)
         if (i < intro.messages.length - 1) {
           await this.delay(1000);
+        }
+      }
+
+      // ===== CREATE THE ACTUAL QUEST =====
+      // Get the full desire from npc_desires table
+      const fullDesire = npcManager.getCurrentDesire(npc.id);
+
+      if (fullDesire && event.actor.type === 'player') {
+        // Generate quest steps via Gemini (or use fallback)
+        const questResult = await questGenerator.generateQuest(
+          event.actor.id,
+          npc,
+          fullDesire,
+          event.actor.name
+        );
+
+        if (questResult) {
+          // Notify player that quest was created
+          connectionManager.sendToRoom(event.roomId, {
+            type: 'system',
+            content: `\n[Quest Accepted: ${questResult.quest.title}]\n`,
+          });
+
+          // Add status line
+          const statusLine = questManager.getStatusLine(event.actor.id);
+          if (statusLine) {
+            connectionManager.sendToRoom(event.roomId, {
+              type: 'output',
+              content: statusLine,
+            });
+          }
         }
       }
 
@@ -859,6 +893,16 @@ class NpcReactionManager {
     const parts: string[] = [];
 
     parts.push(`Current mood: ${state.mood}`);
+
+    // Check if player has an active quest from this NPC and get hint
+    if (event.actor.type === 'player') {
+      const questHint = questManager.getNpcHintForPlayer(event.actor.id, npc.id);
+      if (questHint) {
+        parts.push(`ACTIVE QUEST: Player is on a quest you gave them.`);
+        parts.push(`Guide them by mentioning: "${questHint}"`);
+        parts.push(`If they seem lost or ask for help, remind them of their current objective.`);
+      }
+    }
 
     // Get NPC's current desire
     const desire = npcManager.getCurrentDesire(npc.id);

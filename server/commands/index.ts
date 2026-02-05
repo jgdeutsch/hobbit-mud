@@ -29,6 +29,7 @@ import {
   handleUnequip,
   handleWash,
   handleRest,
+  handleQuest,
 } from './interaction';
 import {
   handleSay,
@@ -97,6 +98,10 @@ const COMMANDS: Record<string, CommandHandler> = {
   rest: handleRest,
   sleep: handleRest,
 
+  // Quests
+  quest: handleQuest,
+  quests: handleQuest,
+
   // Communication
   say: handleSay,
   "'": handleSay,
@@ -126,6 +131,8 @@ Talk:        talk <npc> [message], say <message>, shout <message>
              whisper <player> <message>, gossip <message>
 NPCs:        context <npc> - see NPC's feelings and desires
              recall <npc> - remember your relationship history
+Quests:      quest - view your active quests
+             quest <number> - view quest journal details
 Social:      smile, wave, bow, etc. (type 'socials' for list)
              You can also create new socials by using them!
 Follow:      follow <target>, unfollow, group

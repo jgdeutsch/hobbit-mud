@@ -4,6 +4,7 @@ import { playerManager } from '../managers/playerManager';
 import { npcManager } from '../managers/npcManager';
 import { followManager } from '../managers/followManager';
 import { connectionManager } from '../managers/connectionManager';
+import { questManager } from '../managers/questManager';
 import { WebSocket } from 'ws';
 
 // Handle movement commands
@@ -67,6 +68,15 @@ export async function handleMovement(
   if (followerMessages.length > 0) {
     output += '\n' + followerMessages.join('\n');
   }
+
+  // Check quest completion for location visit
+  const questResult = questManager.checkLocationVisit(ctx.player.id, newRoomId);
+  if (questResult.completed && questResult.message) {
+    output += `\n\n${questResult.message}`;
+  }
+
+  // Add quest status line if player has active quests
+  output += questManager.getStatusLine(ctx.player.id);
 
   return output;
 }
