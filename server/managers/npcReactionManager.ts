@@ -1058,6 +1058,12 @@ class NpcReactionManager {
       // Try to extract the NPC name from the question
       // Look for NPC names/keywords in the message
       const npcLocation = this.findMentionedNpcLocation(contentLower, state.currentRoom);
+      gameLog.log('NPC', 'LOCATION-QUERY', `Player asking about NPC location`, {
+        query: contentLower,
+        foundNpc: npcLocation?.npcName || 'none',
+        roomId: npcLocation?.roomId || 'none',
+        directions: npcLocation?.directions || 'none',
+      });
       if (npcLocation) {
         parts.push(`IMPORTANT: The player is asking where to find ${npcLocation.npcName}!`);
         parts.push(`${npcLocation.npcName} is located at: ${npcLocation.roomName}`);
