@@ -1,9 +1,11 @@
 import { WebSocket } from 'ws';
+import * as net from 'net';
 import { CommandContext, DIRECTIONS } from '../../shared/types';
 import { worldManager } from '../managers/worldManager';
 import { connectionManager } from '../managers/connectionManager';
 import { socialManager } from '../managers/socialManager';
 import { gameLog } from '../services/logger';
+import { startConkersGame, isInMinigame } from '../minigames/conkers';
 
 // Import command handlers
 import {
@@ -102,6 +104,40 @@ const COMMANDS: Record<string, CommandHandler> = {
   quest: handleQuest,
   quests: handleQuest,
 
+  // Minigames
+  conkers: async (ws, ctx) => {
+    const socket = ws as unknown as net.Socket;
+    if (isInMinigame(socket)) {
+      return 'You\'re already playing a minigame!';
+    }
+    startConkersGame(socket, ctx.player);
+    return ''; // Game handles its own output
+  },
+  play: async (ws, ctx) => {
+    if (ctx.args.length === 0) {
+      return `
+[Hobbit Minigames]
+
+Available games:
+  conkers - A traditional hobbit game of skill and timing!
+            Swing your conker to smash your opponent's.
+            Use SPACEBAR to swing at the right moment.
+
+Type the game name to play (e.g., "conkers")
+`;
+    }
+    const gameName = ctx.args[0].toLowerCase();
+    if (gameName === 'conkers') {
+      const socket = ws as unknown as net.Socket;
+      if (isInMinigame(socket)) {
+        return 'You\'re already playing a minigame!';
+      }
+      startConkersGame(socket, ctx.player);
+      return '';
+    }
+    return `Unknown game: ${gameName}. Type "play" to see available games.`;
+  },
+
   // Communication
   say: handleSay,
   "'": handleSay,
@@ -136,6 +172,8 @@ Quests:      quest - view your active quests
 Social:      smile, wave, bow, etc. (type 'socials' for list)
              You can also create new socials by using them!
 Follow:      follow <target>, unfollow, group
+Minigames:   play - list available minigames
+             conkers - play the classic Shire game!
 Info:        time, score, who, help
 
 The Shire awaits your adventure!
