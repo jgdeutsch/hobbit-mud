@@ -5,7 +5,7 @@ import { worldManager } from '../managers/worldManager';
 import { connectionManager } from '../managers/connectionManager';
 import { socialManager } from '../managers/socialManager';
 import { gameLog } from '../services/logger';
-import { startConkersGame, isInMinigame } from '../minigames/conkers';
+import { startMinesweeperGame, isInMinigame } from '../minigames/minesweeper';
 
 // Import command handlers
 import {
@@ -105,13 +105,13 @@ const COMMANDS: Record<string, CommandHandler> = {
   quests: handleQuest,
 
   // Minigames
-  conkers: async (ws, ctx) => {
+  minesweeper: async (ws, ctx) => {
     const socket = ws as unknown as net.Socket;
     if (isInMinigame(socket)) {
       return 'You\'re already playing a minigame!';
     }
-    startConkersGame(socket, ctx.player);
-    return ''; // Game handles its own output
+    startMinesweeperGame(socket, ctx.player);
+    return '';
   },
   play: async (ws, ctx) => {
     if (ctx.args.length === 0) {
@@ -119,20 +119,20 @@ const COMMANDS: Record<string, CommandHandler> = {
 [Hobbit Minigames]
 
 Available games:
-  conkers - A traditional hobbit game of skill and timing!
-            Swing your conker to smash your opponent's.
-            Use SPACEBAR to swing at the right moment.
+  minesweeper - Clear the field without hitting any mines!
+                Play against a Shire resident.
+                Arrow keys to move, SPACE to reveal, F to flag.
 
-Type the game name to play (e.g., "conkers")
+Type the game name to play (e.g., "minesweeper")
 `;
     }
     const gameName = ctx.args[0].toLowerCase();
-    if (gameName === 'conkers') {
+    if (gameName === 'minesweeper') {
       const socket = ws as unknown as net.Socket;
       if (isInMinigame(socket)) {
         return 'You\'re already playing a minigame!';
       }
-      startConkersGame(socket, ctx.player);
+      startMinesweeperGame(socket, ctx.player);
       return '';
     }
     return `Unknown game: ${gameName}. Type "play" to see available games.`;
@@ -173,7 +173,7 @@ Social:      smile, wave, bow, etc. (type 'socials' for list)
              You can also create new socials by using them!
 Follow:      follow <target>, unfollow, group
 Minigames:   play - list available minigames
-             conkers - play the classic Shire game!
+             minesweeper - clear the field against an NPC!
 Info:        time, score, who, help
 
 The Shire awaits your adventure!
